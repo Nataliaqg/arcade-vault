@@ -1,6 +1,6 @@
 # SPEC 01 — MVP de Arcade Vault: pantallas de UI
 
-> **Estado:** Approved
+> **Estado:** Implemented
 > **Depende de:** ninguna
 > **Fecha:** 2026-10-01
 > **Objetivo:** Portar a Next.js (App Router) las 5 pantallas de `references/templates/` como UI navegable con datos mock, sin funcionalidad real.
@@ -83,7 +83,7 @@ Cada paso deja la app ejecutable y es commiteable por separado. En Next 16 los `
 
 ## Criterios de aceptación
 
-- [ ] `npm run lint` y `npm run build` terminan sin errores.
+- [X] `npm run lint` y `npm run build` terminan sin errores.
 - [X] `/` muestra el hero "ARCADE VAULT" y 8 tarjetas de juego.
 - [X] Clic en una tarjeta o en su botón JUGAR navega a `/juego/<id>` del juego correcto.
 - [X] `/juego/<id>` muestra título, descripción larga, etiquetas, partidas, mejor global, dificultad y 10 filas de leaderboard.
@@ -95,9 +95,9 @@ Cada paso deja la app ejecutable y es commiteable por separado. En Next 16 los `
 - [X] Enviar el formulario de Auth no navega, no guarda nada y no escribe en `localStorage`.
 - [X] `/salon` muestra un tab por cada uno de los 8 juegos, podio de 3 y tabla de 12 filas; cambiar de tab cambia el contenido.
 - [X] El `Nav` aparece en todas las rutas con enlaces a Biblioteca y Salón de la Fama, marca activa correcta (Biblioteca activa en `/` y `/juego/*`) y botón "Iniciar Sesión" hacia `/auth`.
-- [ ] A ancho móvil el `Nav` muestra el botón hamburguesa y abre/cierra el panel lateral.
-- [ ] La consola del navegador no muestra errores ni warnings de hidratación en ninguna de las 5 rutas.
-- [ ] Ninguna ruta usa `localStorage` ni `Math.random` en el render.
+- [X] A ancho móvil el `Nav` muestra el botón hamburguesa y abre/cierra el panel lateral.
+- [X] La consola del navegador no muestra errores ni warnings de hidratación en ninguna de las 5 rutas.
+- [X] Ninguna ruta usa `localStorage` ni `Math.random` en el render.
 
 ## Decisiones
 
