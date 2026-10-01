@@ -31,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="es"
       className={`${pressStart.variable} ${jetbrainsMono.variable} ${courierPrime.variable}`}
     >
-      <body>
+      <body suppressHydrationWarning>
         <div className="av-bg" />
         <div className="av-noise" />
         <div id="root">{children}</div>
