@@ -21,3 +21,6 @@ Arcade Vault: a platform for playing games online and competing for the highest 
 - Path alias `@/*` maps to the repo root.
 - `app/layout.tsx` uses the globally-typed `LayoutProps<"/">` helper (no import needed) and loads Geist fonts via `next/font/google`.
 - Next.js docs matching the installed version are in `node_modules/next/dist/docs/` — consult them before writing code, per AGENTS.md.
+
+##Skills
+Usa siempre /frontend-design para disenhar la interfaz de usuario.
