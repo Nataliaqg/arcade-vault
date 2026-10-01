@@ -8,11 +8,15 @@ export default function Nav() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  const isActive = (name: "biblioteca" | "salon" | "auth") => {
-    if (name === "biblioteca") return pathname === "/" || pathname.startsWith("/juego");
+  type NavName = "inicio" | "biblioteca" | "salon" | "auth";
+
+  const isActive = (name: NavName) => {
+    if (name === "inicio") return pathname === "/";
+    if (name === "biblioteca")
+      return pathname === "/games" || pathname.startsWith("/juego");
     return pathname === `/${name}`;
   };
-  const cls = (name: "biblioteca" | "salon" | "auth") =>
+  const cls = (name: NavName) =>
     isActive(name) ? "active" : undefined;
   const close = () => setOpen(false);
 
@@ -26,7 +30,10 @@ export default function Nav() {
           </div>
         </Link>
         <div className="links">
-          <Link href="/" className={cls("biblioteca")}>
+          <Link href="/" className={cls("inicio")}>
+            Inicio
+          </Link>
+          <Link href="/games" className={cls("biblioteca")}>
             Biblioteca
           </Link>
           <Link href="/salon" className={cls("salon")}>
@@ -59,7 +66,10 @@ export default function Nav() {
         <div className="pixel neon-cyan" style={{ fontSize: 11, marginBottom: 16 }}>
           MENÚ
         </div>
-        <Link href="/" className={cls("biblioteca")} onClick={close}>
+        <Link href="/" className={cls("inicio")} onClick={close}>
+          Inicio
+        </Link>
+        <Link href="/games" className={cls("biblioteca")} onClick={close}>
           Biblioteca
         </Link>
         <Link href="/salon" className={cls("salon")} onClick={close}>
