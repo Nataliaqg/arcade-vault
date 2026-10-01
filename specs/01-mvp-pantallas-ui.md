@@ -84,17 +84,17 @@ Cada paso deja la app ejecutable y es commiteable por separado. En Next 16 los `
 ## Criterios de aceptación
 
 - [ ] `npm run lint` y `npm run build` terminan sin errores.
-- [ ] `/` muestra el hero "ARCADE VAULT" y 8 tarjetas de juego.
-- [ ] Clic en una tarjeta o en su botón JUGAR navega a `/juego/<id>` del juego correcto.
-- [ ] `/juego/<id>` muestra título, descripción larga, etiquetas, partidas, mejor global, dificultad y 10 filas de leaderboard.
-- [ ] `/juego/no-existe` devuelve la página 404 de Next.
-- [ ] `/juego/<id>/jugar` muestra HUD, marco CRT y arena; PAUSA muestra el overlay "EN PAUSA" y REANUDAR lo quita.
-- [ ] FIN abre el modal "FIN DEL JUEGO"; VOLVER AL VAULT navega a `/`; SALIR navega a `/juego/<id>`.
-- [ ] La puntuación del Reproductor no cambia con el tiempo.
-- [ ] `/auth` alterna entre INICIAR SESIÓN y CREAR CUENTA; solo en CREAR CUENTA aparece el campo de correo.
-- [ ] Enviar el formulario de Auth no navega, no guarda nada y no escribe en `localStorage`.
-- [ ] `/salon` muestra un tab por cada uno de los 8 juegos, podio de 3 y tabla de 12 filas; cambiar de tab cambia el contenido.
-- [ ] El `Nav` aparece en todas las rutas con enlaces a Biblioteca y Salón de la Fama, marca activa correcta (Biblioteca activa en `/` y `/juego/*`) y botón "Iniciar Sesión" hacia `/auth`.
+- [X] `/` muestra el hero "ARCADE VAULT" y 8 tarjetas de juego.
+- [X] Clic en una tarjeta o en su botón JUGAR navega a `/juego/<id>` del juego correcto.
+- [X] `/juego/<id>` muestra título, descripción larga, etiquetas, partidas, mejor global, dificultad y 10 filas de leaderboard.
+- [X] `/juego/no-existe` devuelve la página 404 de Next.
+- [X] `/juego/<id>/jugar` muestra HUD, marco CRT y arena; PAUSA muestra el overlay "EN PAUSA" y REANUDAR lo quita.
+- [X] FIN abre el modal "FIN DEL JUEGO"; VOLVER AL VAULT navega a `/`; SALIR navega a `/juego/<id>`.
+- [X] La puntuación del Reproductor no cambia con el tiempo.
+- [X] `/auth` alterna entre INICIAR SESIÓN y CREAR CUENTA; solo en CREAR CUENTA aparece el campo de correo.
+- [X] Enviar el formulario de Auth no navega, no guarda nada y no escribe en `localStorage`.
+- [X] `/salon` muestra un tab por cada uno de los 8 juegos, podio de 3 y tabla de 12 filas; cambiar de tab cambia el contenido.
+- [X] El `Nav` aparece en todas las rutas con enlaces a Biblioteca y Salón de la Fama, marca activa correcta (Biblioteca activa en `/` y `/juego/*`) y botón "Iniciar Sesión" hacia `/auth`.
 - [ ] A ancho móvil el `Nav` muestra el botón hamburguesa y abre/cierra el panel lateral.
 - [ ] La consola del navegador no muestra errores ni warnings de hidratación en ninguna de las 5 rutas.
 - [ ] Ninguna ruta usa `localStorage` ni `Math.random` en el render.
