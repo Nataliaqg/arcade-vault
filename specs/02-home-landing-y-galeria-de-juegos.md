@@ -1,6 +1,6 @@
 # SPEC 02 — Home landing e independencia de la galería de juegos en `/games`
 
-> **Estado:** Approved
+> **Estado:** Implemented
 > **Depende de:** SPEC 01
 > **Fecha:** 2026-10-01
 > **Objetivo:** Reemplazar el home actual por la landing de `references/templates/home-about/` (sin la sección Acerca de) y mover el listado completo de juegos a una nueva ruta `/games`, accesible desde "Juegos disponibles ahora".
