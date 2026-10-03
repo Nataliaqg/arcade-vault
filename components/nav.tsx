@@ -13,7 +13,7 @@ export default function Nav() {
   const isActive = (name: NavName) => {
     if (name === "inicio") return pathname === "/";
     if (name === "biblioteca")
-      return pathname === "/games" || pathname.startsWith("/juego");
+      return pathname === "/games" || pathname.startsWith("/games/");
     return pathname === `/${name}`;
   };
   const cls = (name: NavName) =>

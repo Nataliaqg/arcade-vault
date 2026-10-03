@@ -3,7 +3,7 @@ import type { Game } from "@/lib/data";
 
 export default function MiniCard({ game }: { game: Game }) {
   return (
-    <Link href={`/juego/${game.id}`} className="mini-card">
+    <Link href={`/games/${game.id}`} className="mini-card">
       <div className="mini-cover">
         <div className={"cover-bg " + game.cover}></div>
       </div>

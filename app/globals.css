@@ -517,6 +517,24 @@ a { color: inherit; text-decoration: none; }
   text-shadow: 0 0 8px var(--yellow);
 }
 
+.cover-asteroids { background: #000; }
+.cover-asteroids::after {
+  content: "";
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 24% 32%, transparent 0 17px, rgba(255,255,255,0.85) 18px 19px, transparent 20px),
+    radial-gradient(circle at 76% 58%, transparent 0 25px, rgba(255,255,255,0.85) 26px 27px, transparent 28px),
+    radial-gradient(circle at 48% 82%, transparent 0 11px, rgba(255,255,255,0.85) 12px 13px, transparent 14px),
+    radial-gradient(circle at 86% 20%, rgba(255,255,255,0.9) 0 2px, transparent 3px),
+    radial-gradient(circle at 12% 74%, rgba(255,255,255,0.9) 0 2px, transparent 3px);
+}
+.cover-asteroids::before {
+  content: "▲";
+  position: absolute; left: 47%; top: 42%;
+  color: #fff; font-size: 22px;
+  text-shadow: 0 0 8px var(--cyan);
+}
+
 .cover-rana { background: linear-gradient(180deg,#001f2a,#0a0a18); }
 .cover-rana::after {
   content: "";
@@ -613,16 +631,19 @@ a { color: inherit; text-decoration: none; }
 
 /* ===== player ===== */
 .av-player {
+  /* Vertical space taken by nav, HUD, CRT bezel and margins; the screen gets the rest. */
+  --player-chrome: 230px;
+  --crt-pad: 16px;
   max-width: 1100px;
-  margin: 32px auto;
-  padding: 0 24px 64px;
+  margin: 12px auto;
+  padding: 0 24px 16px;
 }
 .player-hud {
   display: flex; gap: 16px; align-items: center; justify-content: space-between;
   padding: 14px 18px;
   border: 1px solid var(--line);
   background: var(--bg-2);
-  margin-bottom: 18px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
 }
 .hud-stat { display: flex; flex-direction: column; gap: 4px; }
@@ -636,12 +657,15 @@ a { color: inherit; text-decoration: none; }
   position: relative;
   border-radius: 28px;
   background: #050507;
-  padding: 24px;
+  padding: var(--crt-pad);
   box-shadow:
     0 0 0 6px #1b1b22,
     0 0 0 7px #2a2a35,
     0 30px 80px -20px rgba(0,245,255,0.35);
   overflow: hidden;
+  /* Keep the 4:3 screen fully visible: width follows the available height (min 320px). */
+  width: min(100%, max(320px, calc((100dvh - var(--player-chrome)) * 4 / 3 + var(--crt-pad) * 2)));
+  margin-inline: auto;
 }
 .crt::before {
   content: "";
@@ -680,7 +704,7 @@ a { color: inherit; text-decoration: none; }
 }
 .crt-bottom {
   display: flex; align-items: center; justify-content: space-between;
-  margin-top: 14px;
+  margin-top: 8px;
   padding: 0 8px;
   font-family: var(--pixel);
   font-size: 8px;
