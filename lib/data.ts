@@ -104,6 +104,17 @@ export const GAMES: Game[] = [
     best: 24,
     plays: "4.2K",
   },
+  {
+    id: "asteroids",
+    title: "ASTEROIDS",
+    short: "Destruye asteroides en el vacío antes de que te alcancen.",
+    long: "Una nave vectorial a la deriva en un campo de asteroides sin bordes. Rota, propulsa y dispara para partir las rocas en fragmentos cada vez más pequeños. Recoge el triple disparo y sobrevive a oleadas cada vez más densas.",
+    cat: "SHOOTER",
+    cover: "cover-asteroids",
+    color: "cyan",
+    best: 0,
+    plays: "0",
+  },
 ];
 
 export const CATS: ("TODOS" | GameCategory)[] = [

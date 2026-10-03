@@ -1,6 +1,6 @@
 # SPEC 04 — Primer juego jugable: Asteroids
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 01, SPEC 02
 > **Fecha:** 2026-10-03
 > **Objetivo:** Portar el juego Asteroids de `references/started-games/02-asteroids/` a TypeScript como un motor de canvas que vive dentro del marco CRT del reproductor, publica su estado (puntuación, vidas, nivel) al HUD de React y se registra como un juego nuevo `asteroids` en la galería.
@@ -20,6 +20,8 @@ Hasta ahora `/juego/[id]/jugar` es un mockup con valores fijos (SPEC 01). Astero
 - Registro de motores por id (`lib/games/registry.ts`): `game-player.tsx` monta el motor si el juego tiene uno y conserva el mockup actual si no.
 - `game-player.tsx` conecta el HUD de React (puntuación, vidas, nivel) y los botones PAUSA / FIN / SALIR y el modal de fin de partida al motor real cuando existe.
 - El canvas (800×600) se renderiza dentro de `crt-screen`, con la estética vectorial blanca sobre negro del original, escalado con CSS al ancho disponible sin deformarse.
+- Reproductor ajustado al alto de la ventana (todos los juegos del reproductor): el marco CRT mantiene 4:3 y se reduce para verse entero sin scroll en un portátil; con ventanas muy bajas se impone un mínimo y vuelve el scroll.
+- Rutas nuevas: detalle en `/games/[id]` y reproductor en `/games/[id]/play`. Se mueven las carpetas de `app/juego/`, se actualizan todos los enlaces y el `Nav`, y `/juego/:id` y `/juego/:id/jugar` redirigen de forma permanente a las rutas nuevas (`redirects()` en `next.config.ts`).
 - El HUD interno del canvas se conserva tal como está en el original (SCORE, NIVEL, vidas, indicador `3x`) y el overlay GAME OVER también. El juego es autónomo: tiene su canvas, sus controles y su HUD. React no sustituye esa capa: la HUD de React se alimenta de las notificaciones del motor y se muestra en paralelo.
 
 **Fuera de alcance (para specs futuras):**
@@ -100,13 +102,15 @@ Convenciones:
 
 ## Plan de implementación
 
-1. Añadir el juego `asteroids` a `GAMES` en `lib/data.ts` y la clase CSS `cover-asteroids` en `app/globals.css`. Verificación: aparece en `/games`, en `/juego/asteroids` y en el Salón de la Fama; `/juego/asteroids/jugar` muestra el mockup actual.
+1. Añadir el juego `asteroids` a `GAMES` en `lib/data.ts` y la clase CSS `cover-asteroids` en `app/globals.css`. Verificación: aparece en `/games`, en su detalle y en el Salón de la Fama; su reproductor muestra el mockup actual. (Las rutas pasaron a `/games/asteroids` y `/games/asteroids/play` en el paso 9.)
 2. Crear `lib/games/types.ts` con `GameState`, `GameCallbacks`, `GameEngine` y `GameFactory`. Verificación: `npx tsc --noEmit` pasa.
 3. Portar a `lib/games/asteroids/` las clases, utilidades y constantes de `game.js` (archivos tipados, sin `document` ni `window` globales; el contexto 2D se recibe por parámetro). Verificación: `npm run lint` y `npx tsc --noEmit` pasan.
 4. Implementar `createAsteroids(canvas, callbacks)` en `lib/games/asteroids/index.ts`: input por `keydown`/`keyup` en `window`, bucle con `requestAnimationFrame`, `pause`/`resume`/`restart`/`destroy`, y `onStateChange` en los cambios descritos. Mantener intacto el HUD del canvas (SCORE, NIVEL, vidas, `3x`) y el overlay GAME OVER. Verificación: `destroy` cancela el frame y desregistra los listeners.
-5. Crear `lib/games/registry.ts` con `ENGINES` y refactorizar `components/game-player.tsx`: si `ENGINES[game.id]` existe, montar un `<canvas>` dentro de `crt-screen` con `useEffect` (arranca el motor, `destroy` en el cleanup), guardar `GameState` en `useState` y alimentar el HUD de React; PAUSA → `pause`/`resume`, FIN → abre el modal con la puntuación actual, JUGAR DE NUEVO → `restart`; si no existe motor, conservar el mockup actual sin cambios. Verificación: otros juegos (p. ej. `/juego/caida/jugar`) se ven y se comportan como antes.
+5. Crear `lib/games/registry.ts` con `ENGINES` y refactorizar `components/game-player.tsx`: si `ENGINES[game.id]` existe, montar un `<canvas>` dentro de `crt-screen` con `useEffect` (arranca el motor, `destroy` en el cleanup), guardar `GameState` en `useState` y alimentar el HUD de React; PAUSA → `pause`/`resume`, FIN → abre el modal con la puntuación actual, JUGAR DE NUEVO → `restart`; si no existe motor, conservar el mockup actual sin cambios. Verificación: otros juegos (p. ej. `/games/caida/play`, antes `/juego/caida/jugar`) se ven y se comportan como antes.
 6. Mostrar el modal de fin de partida también cuando el motor reporta `status: "gameover"`, con la puntuación real. Verificación: perder las 3 vidas abre el modal con el puntaje correcto.
-7. Revisar `/juego/asteroids/jugar` en escritorio y ancho móvil, probar React StrictMode en `npm run dev` (sin doble bucle ni listeners duplicados) y confirmar `npm run lint` y `npm run build`.
+7. Revisar el reproductor de Asteroids en escritorio y ancho móvil, probar React StrictMode en `npm run dev` (sin doble bucle ni listeners duplicados) y confirmar `npm run lint` y `npm run build`.
+8. Ajustar el reproductor al alto de la ventana en `app/globals.css` (`.av-player` y `.crt`): reducir márgenes y limitar el ancho del marco con `100dvh` para que el CRT 4:3 se vea entero sin scroll, con un ancho mínimo. Verificación: en una ventana de portátil (p. ej. 1366×768) el canvas se ve completo sin scroll; en móvil no hay scroll horizontal.
+9. Mover las rutas: `app/juego/[id]/page.tsx` → `app/games/[id]/page.tsx` y `app/juego/[id]/jugar/page.tsx` → `app/games/[id]/play/page.tsx`; actualizar los enlaces de `game-card.tsx`, `home/mini-card.tsx`, `game-player.tsx` (SALIR) y el botón JUGAR AHORA del detalle; ajustar `isActive` de Biblioteca en `nav.tsx` a `/games` y `/games/*`; añadir `redirects()` permanentes en `next.config.ts` desde `/juego/:id` y `/juego/:id/jugar`. Verificación: no queda `/juego` en `app/`, `components/` ni `lib/`; las URLs antiguas responden 308 a las nuevas.
 
 Cada paso deja la app ejecutable y es commiteable por separado. Consultar `node_modules/next/dist/docs/` antes de escribir los componentes, según `AGENTS.md`. Cualquier ajuste visual del reproductor se diseña con `/frontend-design`, según `CLAUDE.md`.
 
@@ -114,8 +118,8 @@ Cada paso deja la app ejecutable y es commiteable por separado. Consultar `node_
 
 - [ ] `npm run lint`, `npx tsc --noEmit` y `npm run build` terminan sin errores.
 - [ ] `GAMES` contiene `asteroids` y sigue conteniendo `rocas`, sin cambios en este último.
-- [ ] `/games` muestra la tarjeta ASTEROIDS y `/juego/asteroids` muestra su detalle con botón para jugar.
-- [ ] `/juego/asteroids/jugar` muestra el canvas dentro del marco CRT, sin deformarse, y el juego arranca sin acción adicional.
+- [ ] `/games` muestra la tarjeta ASTEROIDS y `/games/asteroids` muestra su detalle con botón para jugar.
+- [ ] `/games/asteroids/play` muestra el canvas dentro del marco CRT, sin deformarse, y el juego arranca sin acción adicional.
 - [ ] `←` `→` rotan, `↑` propulsa con inercia, `Espacio` dispara; la página no hace scroll al pulsar `Espacio` o las flechas.
 - [ ] Un asteroide grande destruido da 20 puntos, uno mediano 50 y uno pequeño 100, y la puntuación del HUD de React coincide con la del motor.
 - [ ] Al chocar con un asteroide se pierde una vida, el HUD de React la descuenta y la nave reaparece parpadeando e invencible; tras 3 choques el estado es `gameover`.
@@ -126,8 +130,13 @@ Cada paso deja la app ejecutable y es commiteable por separado. Consultar `node_
 - [ ] FIN abre el modal con la puntuación actual; JUGAR DE NUEVO reinicia a 0 puntos, 3 vidas y nivel 1; VOLVER AL VAULT navega a `/games`.
 - [ ] Al llegar a `gameover` aparece el modal de fin con la puntuación real.
 - [ ] Navegar fuera de la página deja de ejecutar el bucle y de escuchar teclas (comprobado en StrictMode y al cambiar de ruta).
-- [ ] `/juego/caida/jugar` y los demás juegos sin motor muestran el mockup igual que antes.
-- [ ] La consola del navegador no muestra errores ni warnings de hidratación en `/juego/asteroids/jugar`.
+- [ ] `/games/caida/play` y los demás juegos sin motor muestran el mockup igual que antes.
+- [ ] La consola del navegador no muestra errores ni warnings de hidratación en `/games/asteroids/play`.
+- [ ] En una ventana de portátil (p. ej. 1366×768 o 1440×800), `/games/asteroids/play` muestra el HUD y el CRT completo sin scroll vertical; en ventanas muy bajas se aplica el mínimo y reaparece el scroll.
+- [ ] Las tarjetas de `/games` y las mini-tarjetas del Inicio navegan a `/games/<id>`; JUGAR AHORA lleva a `/games/<id>/play`; SALIR vuelve a `/games/<id>`.
+- [ ] `/juego/<id>` y `/juego/<id>/jugar` responden redirect permanente (308) a `/games/<id>` y `/games/<id>/play`.
+- [ ] Biblioteca aparece activa en el `Nav` en `/games` y `/games/*`.
+- [ ] `/games/no-existe` devuelve 404.
 - [ ] No se usa `localStorage` ni se escribe en Supabase.
 
 ## Decisiones
@@ -141,6 +150,10 @@ Cada paso deja la app ejecutable y es commiteable por separado. Consultar `node_
 - **Sí:** registro de motores por id (`ENGINES`), con mockup como fallback. **No:** componente aparte por juego, que duplicaría el marco CRT y el HUD.
 - **Sí:** estética vectorial blanca del original dentro del CRT. **No:** reestilizar con neón del Vault en esta spec.
 - **Sí:** sin guardar puntuaciones. El guardado va con la spec de tablas y auth en Supabase; `best` y `plays` del registro son mock.
+- **Sí:** rutas `/games/[id]` y `/games/[id]/play`, a petición del usuario tras probar la spec. Esto **revierte** la decisión de SPEC 01 y SPEC 02 de mantener las URLs en español (`/juego`); `/salon` y `/auth` no cambian. **No:** dejar `/juego/*` como rutas vivas.
+- **Sí:** redirect permanente (308) desde `/juego/*`, para no romper enlaces guardados. **No:** dejarlas dando 404.
+- **Sí:** el ajuste de altura aplica a todos los juegos del reproductor (marco CRT común). **No:** solo a los que tienen motor; los mockups quedarían con otro tamaño.
+- **Sí:** el ajuste usa `100dvh` y un ancho mínimo; en ventanas muy bajas vuelve el scroll. **No:** escalar sin límite hasta hacer el juego ilegible.
 - **Sí:** categoría `SHOOTER`, color `cyan` y cover propio `cover-asteroids`. Propuesta mía para el registro; puede ajustarse al revisar.
 
 ## Riesgos
@@ -153,6 +166,8 @@ Cada paso deja la app ejecutable y es commiteable por separado. Consultar `node_
 | El canvas se deforma o se desborda en móvil                                      | Canvas 800×600 con `width: 100%; height: auto`; revisión a ancho móvil. Sin controles táctiles en esta spec.  |
 | El motor depende de `window`/`document` y rompe el renderizado en servidor       | Se instancia solo dentro de `useEffect` en un client component; no se accede a globals al importar el módulo. |
 | El estado del juego y el HUD de React se desincronizan tras pausa o reinicio     | `restart` emite el estado inicial; `pause`/`resume` emiten `status`; criterios de aceptación específicos.     |
+| Enlaces antiguos a `/juego/*` quedan sin migrar                                  | Grep de `/juego` en `app/`, `components/` y `lib/` y redirects 308 en `next.config.ts`.                       |
+| El alto reservado para nav, HUD y bisel (`--player-chrome`) no coincide con el real | Medirlo en el navegador a 1366×768 y 1440×800 y ajustar la variable.                                       |
 
 ## Qué **no** está en esta spec
 
@@ -162,6 +177,7 @@ Cada paso deja la app ejecutable y es commiteable por separado. Consultar `node_
 - Controles táctiles, gamepad y sonido.
 - Otros juegos reales (Tetris, Arkanoid, etc.).
 - Cambios en `rocas`.
+- Renombrar `/salon` y `/auth`.
 - Tests automatizados.
 
 Cada una de estas cosas, si se aborda, va en su propia spec.
