@@ -1,6 +1,6 @@
 # SPEC 03 — Integración de Supabase con Next.js
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 01, SPEC 02
 > **Fecha:** 2026-10-03
 > **Objetivo:** Conectar el proyecto Next.js con el proyecto Supabase existente (`dmvyjwmloioaxmzugzvk`) mediante clientes de navegador y de servidor y una ruta de salud que confirme la conexión, sin crear tablas ni lógica de negocio.
