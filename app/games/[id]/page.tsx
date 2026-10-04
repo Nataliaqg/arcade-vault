@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { GAMES, seededScores } from "@/lib/data";
+import { getGame } from "@/lib/db/games";
+import { getTopScores } from "@/lib/db/scores";
 
 export default async function GameDetailPage(props: PageProps<"/games/[id]">) {
   const { id } = await props.params;
-  const game = GAMES.find((g) => g.id === id);
+  const game = await getGame(id);
   if (!game) notFound();
 
-  const scores = seededScores(id.length * 17 + 3, 10);
+  const scores = await getTopScores({ gameId: game.id, limit: 10 });
 
   return (
     <div className="av-detail fade-in">
@@ -27,7 +28,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[id]">) {
           <div className="stat-strip">
             <div>
               <div className="l">Partidas</div>
-              <div className="v">{game.plays}</div>
+              <div className="v">{game.plays.toLocaleString("es-ES")}</div>
             </div>
             <div>
               <div className="l">Mejor global</div>
@@ -62,9 +63,14 @@ export default async function GameDetailPage(props: PageProps<"/games/[id]">) {
       <aside>
         <div className="leaderboard">
           <h3>MEJORES PUNTUACIONES</h3>
+          {scores.length === 0 && (
+            <p style={{ color: "var(--ink-dim)", margin: "12px 0 0" }}>
+              Aún no hay puntuaciones. Juega una partida y guarda la tuya.
+            </p>
+          )}
           {scores.map((r, i) => (
             <div
-              key={r.name}
+              key={r.rank}
               className={
                 "lb-row" + (i === 0 ? " top1" : i === 1 ? " top2" : i === 2 ? " top3" : "")
               }

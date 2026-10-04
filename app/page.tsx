@@ -3,7 +3,7 @@ import FeatureIcon, { type FeatureIconKind } from "@/components/home/feature-ico
 import FloatingSilhouettes from "@/components/home/floating-silhouettes";
 import MiniCard from "@/components/home/mini-card";
 import Reveal from "@/components/home/reveal";
-import { GAMES } from "@/lib/data";
+import { getGames } from "@/lib/db/games";
 
 type Tone = "cyan" | "magenta" | "yellow" | "green";
 
@@ -59,7 +59,9 @@ const TOP: { r: number; p: string; s: number }[] = [
   { r: 5, p: "GLITCHA", s: 138900 },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const games = await getGames();
+
   return (
     <div className="home fade-in">
       {/* HERO */}
@@ -124,7 +126,7 @@ export default function Home() {
           <div className="section-rule"></div>
         </div>
         <div className="mini-rail">
-          {GAMES.slice(0, 6).map((g) => (
+          {games.slice(0, 6).map((g) => (
             <MiniCard key={g.id} game={g} />
           ))}
         </div>

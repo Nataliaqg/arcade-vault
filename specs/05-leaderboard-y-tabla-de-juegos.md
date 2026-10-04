@@ -1,6 +1,6 @@
 # SPEC 05 — Tabla de juegos y leaderboard en Supabase
 
-> **Estado:** Approved
+> **Estado:** Implementado
 > **Depende de:** SPEC 01, SPEC 02, SPEC 03, SPEC 04
 > **Fecha:** 2026-10-03
 > **Objetivo:** Crear en Supabase las tablas `games` y `scores`, hacer que el catálogo se lea de `games` (solo `asteroids`) y que Asteroids guarde puntuaciones anónimas con nombre que se muestran en un leaderboard general y uno por juego.
@@ -25,6 +25,7 @@ SPEC 03 dejó la conexión con Supabase lista sin tablas. SPEC 04 dejó fuera gu
 - El nombre escrito se guarda tal cual en `scores.player_name` y también en `localStorage` (`arcade-vault:player-name:v1`). Cuando el modal vuelve a aparecer, la caja de texto viene rellena con ese nombre y basta pulsar GUARDAR; el jugador puede editarlo.
 - Leaderboard general (mejores puntuaciones de cualquier juego, con columna de juego) y leaderboard por juego, ambos en `/salon` mediante pestañas.
 - Top 10 del juego en `/games/[id]`.
+- `app/error.tsx`: pantalla de error con el estilo del Vault (REINTENTAR y VOLVER AL INICIO) para cuando Supabase no responde al cargar una página.
 
 **Fuera de alcance (para specs futuras):**
 
@@ -109,10 +110,13 @@ Contrato de las funciones de acceso:
 getGames(): Promise<Game[]>
 getGame(id: string): Promise<Game | null>
 
-// lib/db/scores.ts
-getTopScores(opts: { gameId?: string; limit: number }): Promise<ScoreRow[]> // servidor
+// lib/db/scores.ts (servidor)
+getTopScores(opts: { gameId?: string; limit: number }): Promise<ScoreRow[]>
+
+// lib/db/submit-score.ts (navegador; archivo aparte porque lib/db/scores.ts
+// importa next/headers y no puede entrar en un client component)
 submitScore(input: { gameId: string; playerName: string; score: number }):
-  Promise<{ rank: number }>                                                // navegador
+  Promise<{ rank: number }>   // rank 0 = guardado, posición desconocida
 ```
 
 Convenciones:
@@ -138,7 +142,7 @@ Convenciones:
 8. Convertir `components/hall-of-fame.tsx` para recibir `games` y los rankings por props desde `app/salon/page.tsx`: pestaña GENERAL (top 20 de todos los juegos, con columna JUEGO) y una pestaña por juego (top 20). Verificación: `/salon` muestra las pestañas y datos reales (tras insertar filas de prueba).
 9. Añadir el top 10 del juego en `app/games/[id]/page.tsx`. Verificación: coincide con la pestaña del juego en `/salon`.
 10. Modificar el modal de fin de partida en `game-player.tsx`: campo de nombre (3 a 12 caracteres), botón GUARDAR que llama a `submitScore`, estados de carga y error, y vista posterior con posición y top 5. Se puede cerrar sin guardar. Al abrir el modal, rellenar el campo con el nombre de `localStorage` si existe; tras un guardado exitoso, escribir el nombre en `localStorage`. Verificación: perder la partida, guardar `TESTER` y verlo en `/salon` y en `/games/asteroids`; perder otra vez y ver `TESTER` ya escrito, pulsar GUARDAR y ver la segunda fila con ese nombre.
-11. Revisar estados vacío y de error (sin puntuaciones, Supabase no disponible, nombre inválido) y probar a ancho móvil. Verificación: `npm run lint`, `npx tsc --noEmit` y `npm run build` pasan.
+11. Revisar estados vacío y de error (sin puntuaciones, Supabase no disponible, nombre inválido) y crear `app/error.tsx` (en esta versión de Next el error boundary recibe `retry`, no `reset`) y probar a ancho móvil. Verificación: `npm run lint`, `npx tsc --noEmit` y `npm run build` pasan.
 
 Cada paso deja la app ejecutable y es commiteable por separado. Consultar `node_modules/next/dist/docs/` antes de escribir los componentes de servidor, según `AGENTS.md`, y la doc vigente de Supabase (`search_docs`) para RLS. Los cambios de interfaz (pestañas, tabla de ranking, modal) se diseñan con `/frontend-design`, según `CLAUDE.md`.
 
@@ -162,6 +166,7 @@ Cada paso deja la app ejecutable y es commiteable por separado. Consultar `node_
 - [ ] `best` y `plays` de ASTEROIDS reflejan el máximo y el número de filas en `scores`; con la tabla vacía muestran 0.
 - [ ] Con `scores` vacía, `/salon` y el detalle muestran un estado vacío, sin errores.
 - [ ] Si Supabase falla al guardar, el modal muestra un error y permite reintentar sin perder la puntuación.
+- [ ] Si Supabase no responde al cargar `/`, `/games` o `/salon`, se muestra `app/error.tsx` con REINTENTAR y VOLVER AL INICIO, no la pantalla de error genérica de Next.
 - [ ] La consola del navegador no muestra errores ni warnings de hidratación en `/salon` y `/games/asteroids/play`.
 - [ ] Tras un guardado exitoso, `localStorage["arcade-vault:player-name:v1"]` contiene el nombre guardado, sin espacios sobrantes.
 - [ ] Al volver a abrir el modal en una partida nueva (o tras recargar la página), el campo ya contiene ese nombre y GUARDAR está activo sin escribir nada.
