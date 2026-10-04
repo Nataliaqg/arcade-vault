@@ -1,7 +1,10 @@
 import GameCard from "@/components/game-card";
-import { CATS, GAMES } from "@/lib/data";
+import { CATS } from "@/lib/data";
+import { getGames } from "@/lib/db/games";
 
-export default function GamesPage() {
+export default async function GamesPage() {
+  const games = await getGames();
+
   return (
     <div className="fade-in">
       <section className="av-hero">
@@ -31,7 +34,7 @@ export default function GamesPage() {
       </div>
 
       <div className="av-grid">
-        {GAMES.map((g) => (
+        {games.map((g) => (
           <GameCard key={g.id} game={g} />
         ))}
       </div>

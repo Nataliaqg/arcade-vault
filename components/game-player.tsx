@@ -2,13 +2,12 @@
 
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
+import GameOverModal from "@/components/game-over-modal";
 import type { Game } from "@/lib/data";
 import { ENGINES } from "@/lib/games/registry";
 import type { GameEngine, GameState } from "@/lib/games/types";
 
-// Mockup (games without an engine): HUD values are fixed, nothing is simulated or saved.
 const PLAYER = "INVITADO";
-const MOCK_STATE: GameState = { score: 12480, lives: 3, level: 1, status: "playing" };
 const INITIAL_STATE: GameState = { score: 0, lives: 3, level: 1, status: "playing" };
 
 // Keep keyboard focus on the page so Space/arrows reach the game, not a button.
@@ -19,7 +18,6 @@ export default function GamePlayer({ game }: { game: Game }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const [engineState, setEngineState] = useState<GameState>(INITIAL_STATE);
-  const [mockPaused, setMockPaused] = useState(false);
   const [over, setOver] = useState(false);
 
   useEffect(() => {
@@ -33,9 +31,8 @@ export default function GamePlayer({ game }: { game: Game }) {
     };
   }, [factory]);
 
-  const real = !!factory;
-  const state = real ? engineState : MOCK_STATE;
-  const paused = real ? state.status === "paused" : mockPaused;
+  const state = engineState;
+  const paused = state.status === "paused";
   // The modal opens with FIN or when the engine reports game over, and closes
   // by itself if the engine restarts (e.g. Space on the game over screen).
   const showModal = over || state.status === "gameover";
@@ -43,7 +40,7 @@ export default function GamePlayer({ game }: { game: Game }) {
   const togglePause = (e: MouseEvent<HTMLElement>) => {
     blurAfterClick(e);
     const engine = engineRef.current;
-    if (!engine) return setMockPaused((p) => !p);
+    if (!engine) return;
     if (paused) engine.resume();
     else engine.pause();
   };
@@ -57,7 +54,6 @@ export default function GamePlayer({ game }: { game: Game }) {
   const restart = (e: MouseEvent<HTMLElement>) => {
     blurAfterClick(e);
     engineRef.current?.restart();
-    setMockPaused(false);
     setOver(false);
   };
 
@@ -97,22 +93,12 @@ export default function GamePlayer({ game }: { game: Game }) {
 
       <div className="crt">
         <div className="crt-screen">
-          {real ? (
-            <canvas
-              ref={canvasRef}
-              width={800}
-              height={600}
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-            />
-          ) : (
-            <div className="game-arena">
-              <div className="grid-floor"></div>
-              <div className="enemy e1"></div>
-              <div className="enemy e2"></div>
-              <div className="enemy e3"></div>
-              <div className="player-ship"></div>
-            </div>
-          )}
+          <canvas
+            ref={canvasRef}
+            width={800}
+            height={600}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+          />
           {paused && !showModal && (
             <div className="crt-content" style={{ background: "rgba(0,0,0,0.6)", zIndex: 5 }}>
               <div>
@@ -135,21 +121,7 @@ export default function GamePlayer({ game }: { game: Game }) {
       </div>
 
       {showModal && (
-        <div className="modal-bd">
-          <div className="modal">
-            <h2>FIN DEL JUEGO</h2>
-            <div className="final-label">PUNTUACIÓN FINAL</div>
-            <div className="final">{state.score.toLocaleString("es-ES")}</div>
-            <div className="actions">
-              <button type="button" className="btn" onClick={restart}>
-                JUGAR DE NUEVO
-              </button>
-              <Link href="/games" className="btn magenta">
-                VOLVER AL VAULT
-              </Link>
-            </div>
-          </div>
-        </div>
+        <GameOverModal gameId={game.id} score={state.score} onRestart={restart} />
       )}
     </div>
   );
