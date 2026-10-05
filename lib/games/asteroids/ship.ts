@@ -1,6 +1,7 @@
 import { Bullet } from "./bullet";
 import { TRIPLE_SPREAD } from "./constants";
 import { H, W, rand, wrap, type Keys } from "./utils";
+import type { AsteroidsPalette } from "./skins";
 
 export class Ship {
   x = W / 2;
@@ -69,7 +70,7 @@ export class Ship {
     return [new Bullet(ox, oy, this.angle)];
   }
 
-  draw(ctx: CanvasRenderingContext2D) {
+  draw(ctx: CanvasRenderingContext2D, pal: AsteroidsPalette) {
     if (this.dead) return;
     // Blink while invincible after respawn
     if (this.invincible > 0 && Math.floor(this.invincible * 8) % 2 === 0) return;
@@ -77,9 +78,11 @@ export class Ship {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 1.5;
-    ctx.lineJoin = "round";
+    ctx.strokeStyle = pal.ship;
+    ctx.lineWidth = pal.lineWidth;
+    ctx.lineJoin = pal.pixel ? "miter" : "round";
+    ctx.shadowColor = pal.ship;
+    ctx.shadowBlur = 10 * pal.glow;
 
     // Classic silhouette: triangle with a rear notch
     ctx.beginPath();
@@ -96,7 +99,8 @@ export class Ship {
       ctx.moveTo(-8, -4);
       ctx.lineTo(-8 - rand(6, 14), 0);
       ctx.lineTo(-8, 4);
-      ctx.strokeStyle = "rgba(255, 130, 0, 0.85)";
+      ctx.strokeStyle = pal.shipFlame;
+      ctx.shadowColor = pal.shipFlame;
       ctx.stroke();
     }
 

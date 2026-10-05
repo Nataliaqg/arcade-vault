@@ -62,8 +62,10 @@ Real auth is NOT implemented yet (`/auth` is a UI mock; the player HUD shows "IN
 - Usa siempre /frontend-design para diseñar la interfaz de usuario.
 - `/spec` crea una spec y `/spec-impl` implementa una spec aprobada (instaladas con `npx skills@latest add Klerith/fernando-skills`).
 - Para añadir un juego nuevo (desde `references/started-games/` o desde cero), genera primero su spec con /add-game (`.claude/skills/add-game/`) y luego implementa con /spec-impl. Integrar un juego implica: motor en `lib/games/<id>/`, registro en `ENGINES` (antes de insertar la fila), clase `.cover-<id>` en `globals.css` y migración Supabase `seed_game_<id>` en la tabla `games`.
+- Todo juego debe incluir `lib/games/<id>/skins.ts` con las 3 skins `classic` (por defecto), `neon` y `retro`, legibles en modo oscuro. Tras añadir un juego, ejecuta el agente `skin-designer`.
 
 ## Agents
 
 - `game-planner` (`.claude/agents/game-planner.md`): decide qué juego encaja como siguiente incorporación al catálogo. Mantiene memoria de sus sugerencias en `.claude/agent-memory/game-planner/MEMORY.md` (versionada) y la lista de pendientes en `references/game-suggestions-todo.md`. Solo recomienda: la spec se genera después con `/add-game`.
 - `game-jam` (`.claude/agents/game-jam.md`): recibe un tema y escribe un juego con ≥2 specs alternativas (variantes completas) en `specs/game-jam/<game-id>/`, más un `README.md` comparativo. Solo specs en `Borrador`; la elegida se mueve a `specs/NN-juego-<id>.md` y se implementa con `/spec-impl`.
+- `skin-designer` (`.claude/agents/skin-designer.md`): audita que cada juego tenga ≥3 skins (clásico por defecto, neón, retro), legibles en modo oscuro, e implementa directamente las que falten (`lib/games/<id>/skins.ts`, `setSkin`, selector en el player). Estado en `references/skins-status.md` y memoria en `.claude/agent-memory/skin-designer/MEMORY.md`.

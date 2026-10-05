@@ -1,5 +1,6 @@
 import { RADII, SPEEDS } from "./constants";
 import { H, W, rand, randInt, wrap } from "./utils";
+import type { AsteroidsPalette } from "./skins";
 
 export class Asteroid {
   x: number;
@@ -49,13 +50,15 @@ export class Asteroid {
     ];
   }
 
-  draw(ctx: CanvasRenderingContext2D) {
+  draw(ctx: CanvasRenderingContext2D, pal: AsteroidsPalette) {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rot);
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 1.5;
-    ctx.lineJoin = "round";
+    ctx.strokeStyle = pal.asteroid;
+    ctx.lineWidth = pal.lineWidth;
+    ctx.lineJoin = pal.pixel ? "miter" : "round";
+    ctx.shadowColor = pal.asteroid;
+    ctx.shadowBlur = 10 * pal.glow;
     ctx.beginPath();
     ctx.moveTo(this.verts[0][0], this.verts[0][1]);
     for (let i = 1; i < this.verts.length; i++) {

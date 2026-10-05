@@ -11,19 +11,6 @@ export const BOARD_X = 80;
 export const BOARD_Y = 0;
 export const PANEL_X = 420;
 
-// Indexed by piece type (1–8); 0 is an empty cell.
-export const COLORS: (string | null)[] = [
-  null,
-  "#4dd0e1", // I - cyan
-  "#ffd54f", // O - yellow
-  "#ba68c8", // T - purple
-  "#81c784", // S - green
-  "#e57373", // Z - red
-  "#90caf9", // J - pale blue
-  "#ffb74d", // L - orange
-  "#9e9e9e", // N - nut (metallic gray)
-];
-
 export const PIECES: number[][][] = [
   [],
   [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], // I
@@ -48,6 +35,3 @@ export const MIN_DROP_INTERVAL = 100; // ms
 
 // Horizontal offsets tried when a rotation collides.
 export const KICKS = [0, -1, 1, -2, 2];
-
-export const GRID_LINE = "#22222e";
-export const BOARD_BG = "#1a1a25";

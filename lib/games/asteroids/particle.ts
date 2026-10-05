@@ -1,3 +1,4 @@
+import type { AsteroidsPalette } from "./skins";
 import { rand } from "./utils";
 
 export class Particle {
@@ -27,13 +28,15 @@ export class Particle {
     if (this.ttl <= 0) this.dead = true;
   }
 
-  draw(ctx: CanvasRenderingContext2D) {
+  draw(ctx: CanvasRenderingContext2D, pal: AsteroidsPalette) {
     const alpha = this.ttl / this.life;
-    ctx.strokeStyle = `rgba(255,255,255,${alpha.toFixed(2)})`;
-    ctx.lineWidth = 1;
+    ctx.globalAlpha = Number(alpha.toFixed(2));
+    ctx.strokeStyle = pal.particle;
+    ctx.lineWidth = pal.pixel ? 2 : 1;
     ctx.beginPath();
     ctx.moveTo(this.x, this.y);
     ctx.lineTo(this.x - this.vx * 0.05, this.y - this.vy * 0.05);
     ctx.stroke();
+    ctx.globalAlpha = 1;
   }
 }

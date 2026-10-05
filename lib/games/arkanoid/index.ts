@@ -1,4 +1,5 @@
-import type { GameCallbacks, GameEngine, GameState, GameStatus } from "../types";
+import { DEFAULT_SKIN, type SkinId } from "../skins";
+import type { GameCallbacks, GameEngine, GameOptions, GameState, GameStatus } from "../types";
 import {
   BALL_SIZE,
   BLOCK_H,
@@ -28,6 +29,7 @@ import {
   type Paddle,
 } from "./physics";
 import { draw, type Phase } from "./renderer";
+import { SKINS } from "./skins";
 import { EXPLOSION_DURATION, loadSpritesheet, SPRITESHEET_SRC } from "./sprites";
 
 // Keys the game uses; the page must not scroll or click buttons with them.
@@ -36,6 +38,7 @@ const GAME_KEYS = ["ArrowLeft", "ArrowRight", "KeyP", "Escape"];
 export function createArkanoid(
   canvas: HTMLCanvasElement,
   callbacks: GameCallbacks,
+  options: GameOptions = {},
 ): GameEngine {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D context not available");
@@ -55,6 +58,7 @@ export function createArkanoid(
 
   const keys = { ArrowLeft: false, ArrowRight: false };
 
+  let skin: SkinId = options.skin ?? DEFAULT_SKIN;
   let lastEmitted: GameState | null = null;
 
   // Loading counts as "playing": the contract has no loading status.
@@ -228,6 +232,7 @@ export function createArkanoid(
       ball,
       sheet,
       fontFamily: fontFamily(),
+      palette: SKINS[skin],
     });
     emit();
     rafId = requestAnimationFrame(loop);
@@ -246,6 +251,9 @@ export function createArkanoid(
   return {
     pause,
     resume,
+    setSkin(next: SkinId) {
+      skin = next;
+    },
     restart() {
       if (destroyed) return;
       lastTime = null;

@@ -19,15 +19,3 @@ export const COUNTDOWN_MS = 3000;
 
 // Largest frame step the loop accepts. Below MIN_STEP_MS, so at most one step per frame.
 export const MAX_DT = 50; // ms
-
-// Vault palette for the canvas background, HUD and overlays.
-export const BG = "#0a0a0f"; // --bg
-export const INK = "#e6e9ff"; // --ink
-export const MAGENTA = "#ff006e";
-export const CYAN = "#00f5ff";
-export const YELLOW = "#f5ff00";
-export const SNAKE_COLOR = YELLOW;
-export const SNAKE_HEAD_COLOR = "#fbff80";
-export const GRID_COLOR = "rgba(230,233,255,0.05)";
-export const FRUIT_FALLBACK_COLOR = MAGENTA;
-export const OVERLAY_VEIL = "rgba(10,10,15,0.7)";

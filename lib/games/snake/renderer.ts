@@ -1,21 +1,6 @@
-import {
-  BG,
-  CELL,
-  COLS,
-  CYAN,
-  FRUIT_FALLBACK_COLOR,
-  GRID_COLOR,
-  H,
-  INK,
-  MAGENTA,
-  OVERLAY_VEIL,
-  ROWS,
-  SNAKE_COLOR,
-  SNAKE_HEAD_COLOR,
-  W,
-  YELLOW,
-} from "./constants";
+import { CELL, COLS, H, ROWS, W } from "./constants";
 import type { Cell, Dir } from "./snake";
+import type { SnakePalette } from "./skins";
 import { FRUIT_SPRITES, type FruitSheet } from "./sprites";
 
 export type Phase = "loading" | "countdown" | "playing" | "won" | "lost";
@@ -33,6 +18,7 @@ export type RenderView = {
   sheet: FruitSheet;
   /** CSS font-family string, already ending in a monospace fallback. */
   fontFamily: string;
+  palette: SnakePalette;
 };
 
 const HUD_SIZE = 12;
@@ -44,23 +30,22 @@ const SUB_SIZE = 12;
 const COUNTDOWN_SIZE = 96;
 
 const SEGMENT_INSET = 4; // segment = CELL - 2 * inset, so neighbours leave a neon gap
-const SEGMENT_RADIUS = 8;
 const FRUIT_HEIGHT = 32;
 const FRUIT_FALLBACK_RADIUS = 12;
 const EYE_RADIUS = 3.5;
 const PUPIL_RADIUS = 1.6;
 
-function glow(c: CanvasRenderingContext2D, color: string, blur = 12) {
+function glow(c: CanvasRenderingContext2D, p: SnakePalette, color: string, blur = 12) {
   c.shadowColor = color;
-  c.shadowBlur = blur;
+  c.shadowBlur = blur * p.glow;
 }
 
 function noGlow(c: CanvasRenderingContext2D) {
   c.shadowBlur = 0;
 }
 
-function drawGrid(c: CanvasRenderingContext2D) {
-  c.strokeStyle = GRID_COLOR;
+function drawGrid(c: CanvasRenderingContext2D, p: SnakePalette) {
+  c.strokeStyle = p.grid;
   c.lineWidth = 1;
   c.beginPath();
   for (let x = 1; x < COLS; x++) {
@@ -79,28 +64,39 @@ function drawFruit(c: CanvasRenderingContext2D, v: RenderView) {
   const cx = v.fruit.cell.x * CELL + CELL / 2;
   const cy = v.fruit.cell.y * CELL + CELL / 2;
 
-  if (v.sheet.status === "loaded") {
+  const p = v.palette;
+
+  if (p.fruit === "sprite" && v.sheet.status === "loaded") {
     const f = FRUIT_SPRITES[v.fruit.sprite];
     // Keeps the crop's aspect ratio at a fixed height, centered in its cell.
     const w = (f.sw / f.sh) * FRUIT_HEIGHT;
     c.drawImage(v.sheet.image, f.sx, f.sy, f.sw, f.sh, cx - w / 2, cy - FRUIT_HEIGHT / 2, w, FRUIT_HEIGHT);
   } else {
-    c.fillStyle = FRUIT_FALLBACK_COLOR;
-    glow(c, FRUIT_FALLBACK_COLOR, 12);
-    c.beginPath();
-    c.arc(cx, cy, FRUIT_FALLBACK_RADIUS, 0, Math.PI * 2);
-    c.fill();
+    c.fillStyle = p.fruitFallback;
+    glow(c, p, p.fruitFallback, 12);
+    if (p.fruit === "square") {
+      const side = FRUIT_FALLBACK_RADIUS * 2 - 4;
+      c.fillRect(cx - side / 2, cy - side / 2, side, side);
+    } else {
+      c.beginPath();
+      c.arc(cx, cy, FRUIT_FALLBACK_RADIUS, 0, Math.PI * 2);
+      c.fill();
+    }
     noGlow(c);
   }
 }
 
 function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  if (r === 0) {
+    c.fillRect(x, y, w, h);
+    return;
+  }
   c.beginPath();
   c.roundRect(x, y, w, h, r);
   c.fill();
 }
 
-function drawEyes(c: CanvasRenderingContext2D, head: Cell, dir: Dir) {
+function drawEyes(c: CanvasRenderingContext2D, p: SnakePalette, head: Cell, dir: Dir) {
   const cx = head.x * CELL + CELL / 2;
   const cy = head.y * CELL + CELL / 2;
   const ahead = 6; // eyes sit toward the direction of travel
@@ -113,11 +109,15 @@ function drawEyes(c: CanvasRenderingContext2D, head: Cell, dir: Dir) {
   for (const side of [-1, 1]) {
     const ex = cx + fx + (horizontal ? 0 : side * spread);
     const ey = cy + fy + (horizontal ? side * spread : 0);
-    c.fillStyle = INK;
+    c.fillStyle = p.eyeWhite;
+    if (p.pixelEyes) {
+      c.fillRect(ex - EYE_RADIUS, ey - EYE_RADIUS, EYE_RADIUS * 2, EYE_RADIUS * 2);
+      continue;
+    }
     c.beginPath();
     c.arc(ex, ey, EYE_RADIUS, 0, Math.PI * 2);
     c.fill();
-    c.fillStyle = BG;
+    c.fillStyle = p.pupil;
     c.beginPath();
     c.arc(ex + (horizontal ? sign : 0), ey + (horizontal ? 0 : sign), PUPIL_RADIUS, 0, Math.PI * 2);
     c.fill();
@@ -125,9 +125,10 @@ function drawEyes(c: CanvasRenderingContext2D, head: Cell, dir: Dir) {
 }
 
 function drawSnake(c: CanvasRenderingContext2D, v: RenderView) {
+  const p = v.palette;
   const size = CELL - SEGMENT_INSET * 2;
-  c.fillStyle = SNAKE_COLOR;
-  glow(c, SNAKE_COLOR, 14);
+  c.fillStyle = p.snake;
+  glow(c, p, p.snake, 14);
 
   // Bridges between consecutive segments make the body read as one continuous tube.
   for (let i = v.body.length - 1; i > 0; i--) {
@@ -141,29 +142,30 @@ function drawSnake(c: CanvasRenderingContext2D, v: RenderView) {
   }
   for (let i = v.body.length - 1; i > 0; i--) {
     const s = v.body[i];
-    roundRect(c, s.x * CELL + SEGMENT_INSET, s.y * CELL + SEGMENT_INSET, size, size, SEGMENT_RADIUS);
+    roundRect(c, s.x * CELL + SEGMENT_INSET, s.y * CELL + SEGMENT_INSET, size, size, p.segmentRadius);
   }
 
   const head = v.body[0];
-  c.fillStyle = SNAKE_HEAD_COLOR;
-  glow(c, SNAKE_HEAD_COLOR, 18);
-  roundRect(c, head.x * CELL + SEGMENT_INSET, head.y * CELL + SEGMENT_INSET, size, size, SEGMENT_RADIUS);
+  c.fillStyle = p.snakeHead;
+  glow(c, p, p.snakeHead, 18);
+  roundRect(c, head.x * CELL + SEGMENT_INSET, head.y * CELL + SEGMENT_INSET, size, size, p.segmentRadius);
   noGlow(c);
-  drawEyes(c, head, v.dir);
+  drawEyes(c, p, head, v.dir);
 }
 
 function drawHud(c: CanvasRenderingContext2D, v: RenderView) {
+  const p = v.palette;
   c.font = `${HUD_SIZE}px ${v.fontFamily}`;
   c.textBaseline = "alphabetic";
 
   c.textAlign = "left";
-  c.fillStyle = CYAN;
-  glow(c, CYAN, 8);
+  c.fillStyle = p.hudScore;
+  glow(c, p, p.hudScore, 8);
   c.fillText(String(v.score).padStart(5, "0"), HUD_MARGIN, HUD_Y);
 
   c.textAlign = "right";
-  c.fillStyle = YELLOW;
-  glow(c, YELLOW, 8);
+  c.fillStyle = p.hudLevel;
+  glow(c, p, p.hudLevel, 8);
   c.fillText(`NIVEL ${v.level}`, W - HUD_MARGIN, HUD_Y);
   noGlow(c);
 }
@@ -175,7 +177,8 @@ function drawOverlay(
   color: string,
   sub?: string,
 ) {
-  c.fillStyle = OVERLAY_VEIL;
+  const p = v.palette;
+  c.fillStyle = p.veil;
   c.fillRect(0, 0, W, H);
 
   c.textAlign = "center";
@@ -185,51 +188,53 @@ function drawOverlay(
   const fit = Math.min(1, (W - TITLE_MARGIN * 2) / c.measureText(title).width);
   c.font = `${Math.floor(TITLE_SIZE * fit)}px ${v.fontFamily}`;
   c.fillStyle = color;
-  glow(c, color, 24);
+  glow(c, p, color, 24);
   c.fillText(title, W / 2, H / 2 - 12);
   noGlow(c);
 
   if (sub) {
     c.font = `${SUB_SIZE}px ${v.fontFamily}`;
-    c.fillStyle = INK;
+    c.fillStyle = p.ink;
     c.fillText(sub, W / 2, H / 2 + 36);
   }
 }
 
 function drawCountdown(c: CanvasRenderingContext2D, v: RenderView) {
-  c.fillStyle = OVERLAY_VEIL;
+  const p = v.palette;
+  c.fillStyle = p.veil;
   c.fillRect(0, 0, W, H);
 
   c.textAlign = "center";
   c.textBaseline = "middle";
   c.font = `${COUNTDOWN_SIZE}px ${v.fontFamily}`;
-  c.fillStyle = CYAN;
-  glow(c, CYAN, 32);
+  c.fillStyle = p.countdown;
+  glow(c, p, p.countdown, 32);
   c.fillText(String(Math.max(1, Math.ceil(v.countdownMs / 1000))), W / 2, H / 2 - 12);
   noGlow(c);
 
   c.font = `${SUB_SIZE}px ${v.fontFamily}`;
-  c.fillStyle = INK;
+  c.fillStyle = p.ink;
   c.fillText("PREPÁRATE", W / 2, H / 2 + 56);
 }
 
 export function draw(c: CanvasRenderingContext2D, v: RenderView) {
-  c.fillStyle = BG;
+  const p = v.palette;
+  c.fillStyle = p.bg;
   c.fillRect(0, 0, W, H);
 
   if (v.phase === "loading") {
-    drawOverlay(c, v, "CARGANDO…", CYAN);
+    drawOverlay(c, v, "CARGANDO…", p.titleLoading);
     return;
   }
 
-  drawGrid(c);
+  drawGrid(c, p);
   drawFruit(c, v);
   drawSnake(c, v);
   drawHud(c, v);
 
   const points = `${v.score} PUNTOS`;
-  if (v.phase === "lost") drawOverlay(c, v, "GAME OVER", MAGENTA, points);
-  else if (v.phase === "won") drawOverlay(c, v, "¡REJILLA LLENA!", YELLOW, points);
-  else if (v.paused) drawOverlay(c, v, "PAUSA", CYAN, "P o Esc para seguir");
+  if (v.phase === "lost") drawOverlay(c, v, "GAME OVER", p.titleLost, points);
+  else if (v.phase === "won") drawOverlay(c, v, "¡REJILLA LLENA!", p.titleWon, points);
+  else if (v.paused) drawOverlay(c, v, "PAUSA", p.titlePause, "P o Esc para seguir");
   else if (v.phase === "countdown") drawCountdown(c, v);
 }
