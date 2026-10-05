@@ -757,7 +757,7 @@ a { color: inherit; text-decoration: none; }
 /* ===== player ===== */
 .av-player {
   /* Vertical space taken by nav, HUD, CRT bezel and margins; the screen gets the rest. */
-  --player-chrome: 230px;
+  --player-chrome: 280px;
   --crt-pad: 16px;
   max-width: 1100px;
   margin: 12px auto;
@@ -777,6 +777,16 @@ a { color: inherit; text-decoration: none; }
 .hud-stat.lives .v { color: var(--magenta); text-shadow: 0 0 6px rgba(255,0,110,0.5); }
 .hud-stat.level .v { color: var(--yellow); text-shadow: 0 0 6px rgba(245,255,0,0.5); }
 .hud-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* Skin selector under the screen: three buttons, the active one lit like a CRT switch. */
+.skin-picker {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 4px 2px;
+}
+.skin-picker-label { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); margin-right: 4px; }
+.skin-btn { padding: 8px 14px; font-size: 9px; }
+.skin-btn.active { color: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 10px rgba(0,245,255,0.4), inset 0 0 6px rgba(0,245,255,0.25); }
+.skin-btn:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
 
 .crt {
   position: relative;

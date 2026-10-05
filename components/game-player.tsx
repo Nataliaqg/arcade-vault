@@ -1,14 +1,49 @@
 "use client";
 
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import Link from "next/link";
 import GameOverModal from "@/components/game-over-modal";
 import type { Game } from "@/lib/data";
 import { ENGINES } from "@/lib/games/registry";
+import { DEFAULT_SKIN, isSkinId, SKIN_IDS, SKIN_LABELS, type SkinId } from "@/lib/games/skins";
 import type { GameEngine, GameState } from "@/lib/games/types";
 
 const PLAYER = "INVITADO";
+const SKIN_KEY = "arcade-vault:skin:v1";
 const INITIAL_STATE: GameState = { score: 0, lives: 3, level: 1, status: "playing" };
+
+// Skin preference store. Documented exception to the localStorage rule (a per-viewer
+// preference); the server snapshot is the default skin so hydration stays stable.
+let memorySkin: SkinId | null = null;
+const skinListeners = new Set<() => void>();
+
+function readSkin(): SkinId {
+  if (memorySkin) return memorySkin;
+  try {
+    const saved = localStorage.getItem(SKIN_KEY);
+    if (isSkinId(saved)) return saved;
+  } catch {
+    // Storage unavailable: default skin.
+  }
+  return DEFAULT_SKIN;
+}
+
+function writeSkin(next: SkinId) {
+  memorySkin = next;
+  try {
+    localStorage.setItem(SKIN_KEY, next);
+  } catch {
+    // Storage unavailable: the choice only lasts for this visit.
+  }
+  skinListeners.forEach((l) => l());
+}
+
+function subscribeSkin(listener: () => void) {
+  skinListeners.add(listener);
+  return () => {
+    skinListeners.delete(listener);
+  };
+}
 
 // Keep keyboard focus on the page so Space/arrows reach the game, not a button.
 const blurAfterClick = (e: MouseEvent<HTMLElement>) => e.currentTarget.blur();
@@ -19,17 +54,30 @@ export default function GamePlayer({ game }: { game: Game }) {
   const engineRef = useRef<GameEngine | null>(null);
   const [engineState, setEngineState] = useState<GameState>(INITIAL_STATE);
   const [over, setOver] = useState(false);
+  const skin = useSyncExternalStore(subscribeSkin, readSkin, () => DEFAULT_SKIN);
+  const skinRef = useRef<SkinId>(DEFAULT_SKIN);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!factory || !canvas) return;
-    const engine = factory(canvas, { onStateChange: setEngineState });
+    const engine = factory(canvas, { onStateChange: setEngineState }, { skin: skinRef.current });
     engineRef.current = engine;
     return () => {
       engine.destroy();
       engineRef.current = null;
     };
   }, [factory]);
+
+  // Live skin switch: no restart, the match keeps going.
+  useEffect(() => {
+    skinRef.current = skin;
+    engineRef.current?.setSkin(skin);
+  }, [skin]);
+
+  const chooseSkin = (e: MouseEvent<HTMLElement>, next: SkinId) => {
+    blurAfterClick(e);
+    writeSkin(next);
+  };
 
   const state = engineState;
   const paused = state.status === "paused";
@@ -112,6 +160,20 @@ export default function GamePlayer({ game }: { game: Game }) {
               </div>
             </div>
           )}
+        </div>
+        <div className="skin-picker" role="group" aria-label="Aspecto del juego">
+          <span className="skin-picker-label">Aspecto</span>
+          {SKIN_IDS.map((id) => (
+            <button
+              key={id}
+              type="button"
+              className={`btn ghost skin-btn${id === skin ? " active" : ""}`}
+              aria-pressed={id === skin}
+              onClick={(e) => chooseSkin(e, id)}
+            >
+              {SKIN_LABELS[id]}
+            </button>
+          ))}
         </div>
         <div className="crt-bottom">
           <span className="led">SEÑAL OK</span>

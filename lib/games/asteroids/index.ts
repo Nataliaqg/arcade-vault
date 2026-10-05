@@ -1,10 +1,12 @@
-import type { GameCallbacks, GameEngine, GameState, GameStatus } from "../types";
+import { DEFAULT_SKIN, type SkinId } from "../skins";
+import type { GameCallbacks, GameEngine, GameOptions, GameState, GameStatus } from "../types";
 import { Asteroid } from "./asteroid";
 import { Bullet } from "./bullet";
 import { POINTS, POWERUP_DROP_CHANCE, POWERUP_DURATION } from "./constants";
 import { Particle } from "./particle";
 import { PowerUp } from "./powerup";
 import { Ship } from "./ship";
+import { SKINS } from "./skins";
 import { H, W, dist, rand, type Keys } from "./utils";
 
 // Keys the game uses; the page must not scroll or click buttons with them.
@@ -15,6 +17,7 @@ type Phase = "playing" | "dead" | "gameover";
 export function createAsteroids(
   canvas: HTMLCanvasElement,
   callbacks: GameCallbacks,
+  options: GameOptions = {},
 ): GameEngine {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D context not available");
@@ -60,6 +63,7 @@ export function createAsteroids(
   let killsSinceSpawn: number;
   let paused = false;
 
+  let skin: SkinId = options.skin ?? DEFAULT_SKIN;
   let lastEmitted: GameState | null = null;
 
   const status = (): GameStatus =>
@@ -219,12 +223,15 @@ export function createAsteroids(
 
   // ── Draw ────────────────────────────────────────────────────────────────────
   function drawLifeIcon(c: CanvasRenderingContext2D, x: number, y: number) {
+    const pal = SKINS[skin];
     c.save();
     c.translate(x, y);
     c.rotate(-Math.PI / 2);
-    c.strokeStyle = "#fff";
-    c.lineWidth = 1.2;
-    c.lineJoin = "round";
+    c.strokeStyle = pal.lifeIcon;
+    c.lineWidth = pal.pixel ? 2 : 1.2;
+    c.lineJoin = pal.pixel ? "miter" : "round";
+    c.shadowColor = pal.lifeIcon;
+    c.shadowBlur = 6 * pal.glow;
     c.beginPath();
     c.moveTo(9, 0);
     c.lineTo(-6, -5);
@@ -236,7 +243,9 @@ export function createAsteroids(
   }
 
   function drawHUD(c: CanvasRenderingContext2D) {
-    c.fillStyle = "#fff";
+    const pal = SKINS[skin];
+    c.shadowBlur = 0;
+    c.fillStyle = pal.hudText;
     c.font = "15px monospace";
     c.textBaseline = "alphabetic";
 
@@ -250,31 +259,36 @@ export function createAsteroids(
 
     if (ship.tripleShot > 0) {
       c.textAlign = "left";
-      c.fillStyle = "#0ff";
+      c.fillStyle = pal.hudBonus;
       c.fillText(`3x  ${ship.tripleShot.toFixed(1)}s`, 14, 46);
     }
   }
 
   function drawOverlay(c: CanvasRenderingContext2D, title: string, sub: string) {
+    const pal = SKINS[skin];
     c.textAlign = "center";
     c.textBaseline = "alphabetic";
-    c.fillStyle = "#fff";
+    c.fillStyle = pal.overlayTitle;
+    c.shadowColor = pal.overlayTitle;
+    c.shadowBlur = 16 * pal.glow;
     c.font = "bold 46px monospace";
     c.fillText(title, W / 2, H / 2 - 18);
+    c.shadowBlur = 0;
     c.font = "18px monospace";
-    c.fillStyle = "rgba(255,255,255,0.65)";
+    c.fillStyle = pal.overlaySub;
     c.fillText(sub, W / 2, H / 2 + 22);
   }
 
   function draw(c: CanvasRenderingContext2D) {
-    c.fillStyle = "#000";
+    const pal = SKINS[skin];
+    c.fillStyle = pal.bg;
     c.fillRect(0, 0, W, H);
 
-    particles.forEach((p) => p.draw(c));
-    asteroids.forEach((a) => a.draw(c));
-    powerUps.forEach((p) => p.draw(c));
-    bullets.forEach((b) => b.draw(c));
-    ship.draw(c);
+    particles.forEach((p) => p.draw(c, pal));
+    asteroids.forEach((a) => a.draw(c, pal));
+    powerUps.forEach((p) => p.draw(c, pal));
+    bullets.forEach((b) => b.draw(c, pal));
+    ship.draw(c, pal);
 
     drawHUD(c);
 
@@ -309,6 +323,9 @@ export function createAsteroids(
   rafId = requestAnimationFrame(loop);
 
   return {
+    setSkin(next: SkinId) {
+      skin = next;
+    },
     pause() {
       if (paused || destroyed) return;
       paused = true;

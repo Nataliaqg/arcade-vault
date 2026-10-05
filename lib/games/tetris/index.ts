@@ -1,4 +1,5 @@
-import type { GameCallbacks, GameEngine, GameState, GameStatus } from "../types";
+import { DEFAULT_SKIN, type SkinId } from "../skins";
+import type { GameCallbacks, GameEngine, GameOptions, GameState, GameStatus } from "../types";
 import { clearLines, collide, createBoard, ghostY, merge, type Board } from "./board";
 import {
   BASE_DROP_INTERVAL,
@@ -11,6 +12,7 @@ import {
 } from "./constants";
 import { randomPiece, tryRotate, type Piece } from "./piece";
 import { drawFrame } from "./renderer";
+import { SKINS } from "./skins";
 
 // Keys the game uses; the page must not scroll or click buttons with them.
 const GAME_KEYS = [
@@ -26,6 +28,7 @@ const GAME_KEYS = [
 export function createTetris(
   canvas: HTMLCanvasElement,
   callbacks: GameCallbacks,
+  options: GameOptions = {},
 ): GameEngine {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D context not available");
@@ -44,6 +47,7 @@ export function createTetris(
   let gameOver: boolean;
   let paused = false;
 
+  let skin: SkinId = options.skin ?? DEFAULT_SKIN;
   let lastEmitted: GameState | null = null;
 
   const status = (): GameStatus => (gameOver ? "gameover" : paused ? "paused" : "playing");
@@ -183,7 +187,7 @@ export function createTetris(
       }
     }
 
-    drawFrame(ctx, { board, current, next, score, lines, level, status: status() });
+    drawFrame(ctx, { board, current, next, score, lines, level, status: status(), palette: SKINS[skin] });
     emit();
     rafId = requestAnimationFrame(loop);
   };
@@ -198,6 +202,9 @@ export function createTetris(
   return {
     pause,
     resume,
+    setSkin(next: SkinId) {
+      skin = next;
+    },
     restart() {
       if (destroyed) return;
       lastTime = null;

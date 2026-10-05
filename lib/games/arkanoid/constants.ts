@@ -34,24 +34,3 @@ export type BlockColor =
   | "magenta"
   | "hotpink"
   | "green";
-
-// Flat colors used when the spritesheet fails to load.
-export const BLOCK_FALLBACK_COLORS: Record<BlockColor, string> = {
-  gray: "#9e9e9e",
-  red: "#e53935",
-  yellow: "#f5ff00",
-  cyan: "#00f5ff",
-  magenta: "#d500f9",
-  hotpink: "#ff006e",
-  green: "#39ff14",
-};
-export const PADDLE_FALLBACK_COLOR = "#e6e9ff";
-export const BALL_FALLBACK_COLOR = "#e6e9ff";
-
-// Vault palette for the canvas background, HUD and overlays.
-export const BG = "#0a0a0f"; // --bg
-export const INK = "#e6e9ff"; // --ink
-export const MAGENTA = "#ff006e";
-export const CYAN = "#00f5ff";
-export const YELLOW = "#f5ff00";
-export const OVERLAY_VEIL = "rgba(10,10,15,0.7)";

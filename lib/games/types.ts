@@ -1,3 +1,5 @@
+import type { SkinId } from "./skins";
+
 export type GameStatus = "playing" | "paused" | "gameover";
 
 export type GameState = {
@@ -18,9 +20,14 @@ export type GameEngine = {
   restart: () => void;
   // Cancels requestAnimationFrame and removes every listener.
   destroy: () => void;
+  // Switches skin on the fly, without restarting the game.
+  setSkin: (skin: SkinId) => void;
 };
+
+export type GameOptions = { skin?: SkinId };
 
 export type GameFactory = (
   canvas: HTMLCanvasElement,
   callbacks: GameCallbacks,
+  options?: GameOptions,
 ) => GameEngine;

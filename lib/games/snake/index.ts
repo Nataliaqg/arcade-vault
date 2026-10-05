@@ -1,4 +1,5 @@
-import type { GameCallbacks, GameEngine, GameState, GameStatus } from "../types";
+import { DEFAULT_SKIN, type SkinId } from "../skins";
+import type { GameCallbacks, GameEngine, GameOptions, GameState, GameStatus } from "../types";
 import { COUNTDOWN_MS, H, INITIAL_LENGTH, MAX_DT, W } from "./constants";
 import { draw, type Phase } from "./renderer";
 import {
@@ -12,6 +13,7 @@ import {
   type Cell,
   type Dir,
 } from "./snake";
+import { SKINS } from "./skins";
 import { FRUIT_SPRITES, loadFruitSheet, SPRITESHEET_SRC } from "./sprites";
 
 // Keys the game uses; the page must not scroll or click buttons with them.
@@ -45,6 +47,7 @@ const LIVES = 1; // the game has no lives; the contract field stays fixed
 export function createSnake(
   canvas: HTMLCanvasElement,
   callbacks: GameCallbacks,
+  options: GameOptions = {},
 ): GameEngine {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D context not available");
@@ -64,6 +67,7 @@ export function createSnake(
   let stepAccum = 0;
   let countdownMs = 0;
 
+  let skin: SkinId = options.skin ?? DEFAULT_SKIN;
   let lastEmitted: GameState | null = null;
 
   // Loading counts as "playing": the contract has no loading status.
@@ -233,6 +237,7 @@ export function createSnake(
       fruit,
       sheet,
       fontFamily: fontFamily(),
+      palette: SKINS[skin],
     });
     emit();
     rafId = requestAnimationFrame(loop);
@@ -249,6 +254,9 @@ export function createSnake(
   return {
     pause,
     resume,
+    setSkin(next: SkinId) {
+      skin = next;
+    },
     restart() {
       if (destroyed) return;
       lastTime = null;
