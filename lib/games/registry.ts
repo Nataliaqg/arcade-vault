@@ -1,3 +1,4 @@
+import { createArkanoid } from "./arkanoid";
 import { createAsteroids } from "./asteroids";
 import { createTetris } from "./tetris";
 import type { GameFactory } from "./types";
@@ -6,4 +7,5 @@ import type { GameFactory } from "./types";
 export const ENGINES: Record<string, GameFactory> = {
   asteroids: createAsteroids,
   tetris: createTetris,
+  arkanoid: createArkanoid,
 };

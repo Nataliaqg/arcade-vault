@@ -598,6 +598,48 @@ a { color: inherit; text-decoration: none; }
   filter: drop-shadow(0 0 8px rgba(0,255,136,0.6));
 }
 
+/* ARKANOID: four rows of bricks with three already broken, and the ball
+   climbing toward the gap from the paddle. Each brick strip is 10 columns
+   with a 3px gutter; a gap of n cells starting at column a sits at
+   background-position a/(10-n) × 100%. Rows sit at 8/18/28/38% (8% tall). */
+.cover-arkanoid { background: #0a0a0f; }
+.cover-arkanoid::before,
+.cover-arkanoid::after {
+  content: "";
+  position: absolute; inset: 0;
+  background-repeat: no-repeat;
+}
+.cover-arkanoid::before {
+  background-image:
+    /* broken bricks: row 0 col 7, row 1 cols 3–4 */
+    linear-gradient(#0a0a0f, #0a0a0f),
+    linear-gradient(#0a0a0f, #0a0a0f),
+    /* brick strips */
+    repeating-linear-gradient(90deg, var(--green) 0 calc(10% - 3px), transparent 0 10%),
+    repeating-linear-gradient(90deg, var(--cyan) 0 calc(10% - 3px), transparent 0 10%),
+    repeating-linear-gradient(90deg, var(--yellow) 0 calc(10% - 3px), transparent 0 10%),
+    repeating-linear-gradient(90deg, var(--magenta) 0 calc(10% - 3px), transparent 0 10%);
+  background-size:
+    10% 8%, 20% 8%,
+    100% 8%, 100% 8%, 100% 8%, 100% 8%;
+  background-position:
+    77.778% 8.696%, 37.5% 19.565%,
+    0 41.304%, 0 30.435%, 0 19.565%, 0 8.696%;
+  filter: drop-shadow(0 0 6px rgba(255,0,110,0.35));
+}
+.cover-arkanoid::after {
+  background-image:
+    /* ball and its trail */
+    radial-gradient(circle, #e6e9ff 0 5px, transparent 6px),
+    radial-gradient(circle, rgba(230,233,255,0.5) 0 3px, transparent 4px),
+    radial-gradient(circle, rgba(230,233,255,0.22) 0 2px, transparent 3px),
+    /* paddle */
+    linear-gradient(90deg, var(--cyan), #e6e9ff);
+  background-size: 16px 16px, 10px 10px, 8px 8px, 26% 10px;
+  background-position: 41% 52%, 38% 60%, 35% 68%, 16% 93%;
+  filter: drop-shadow(0 0 8px rgba(0,245,255,0.7));
+}
+
 .cover-rana { background: linear-gradient(180deg,#001f2a,#0a0a18); }
 .cover-rana::after {
   content: "";
