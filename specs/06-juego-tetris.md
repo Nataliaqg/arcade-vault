@@ -1,6 +1,6 @@
 # SPEC 06 — Juego Tetris
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 04, SPEC 05
 > **Fecha:** 2026-10-05
 > **Objetivo:** Portar el juego Tetris de `references/started-games/03-tetris/` a TypeScript como un motor de canvas que vive dentro del marco CRT del reproductor, publica su estado al HUD de React, se registra como `tetris` en la tabla `games` y guarda puntuaciones en el leaderboard.
