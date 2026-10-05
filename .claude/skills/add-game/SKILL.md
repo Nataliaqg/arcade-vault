@@ -25,9 +25,6 @@ Motores registrados hoy:
 Carpetas de motores:
 !`ls lib/games/`
 
-Archivos del skill `/spec` (referencia obligatoria; si aparece un error, no está instalado en `~/.claude/skills/spec/`):
-!`ls ~/.claude/skills/spec/`
-
 ---
 
 Este skill produce **una sola cosa**: un archivo `specs/NN-juego-<id>.md` que describe cómo añadir un juego nuevo a Arcade Vault siguiendo el patrón fijado por `specs/04-juego-asteroids.md` (motor ↔ React) y `specs/05-leaderboard-y-tabla-de-juegos.md` (catálogo y leaderboard en Supabase).
