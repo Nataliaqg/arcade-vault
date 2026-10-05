@@ -1,6 +1,6 @@
 # SPEC 08 — Juego Snake
 
-> **Estado:** Borrador
+> **Estado:** Aprobado
 > **Depende de:** SPEC 04, SPEC 05
 > **Fecha:** 2026-10-05
 > **Objetivo:** Crear el juego Snake en TypeScript como un motor de canvas que vive dentro del marco CRT del reproductor, publica su estado al HUD de React, se registra como `snake` en la tabla `games` y guarda puntuaciones en el leaderboard.
