@@ -24,3 +24,4 @@ Arcade Vault: a platform for playing games online and competing for the highest 
 
 ##Skills
 Usa siempre /frontend-design para disenhar la interfaz de usuario.
+Para añadir un juego nuevo (desde `references/started-games/` o desde cero), genera primero su spec con /add-game y luego implementa con /spec-impl.
