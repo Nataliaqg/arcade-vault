@@ -66,3 +66,4 @@ Real auth is NOT implemented yet (`/auth` is a UI mock; the player HUD shows "IN
 ## Agents
 
 - `game-planner` (`.claude/agents/game-planner.md`): decide qué juego encaja como siguiente incorporación al catálogo. Mantiene memoria de sus sugerencias en `.claude/agent-memory/game-planner/MEMORY.md` (versionada) y la lista de pendientes en `references/game-suggestions-todo.md`. Solo recomienda: la spec se genera después con `/add-game`.
+- `game-jam` (`.claude/agents/game-jam.md`): recibe un tema y escribe un juego con ≥2 specs alternativas (variantes completas) en `specs/game-jam/<game-id>/`, más un `README.md` comparativo. Solo specs en `Borrador`; la elegida se mueve a `specs/NN-juego-<id>.md` y se implementa con `/spec-impl`.
