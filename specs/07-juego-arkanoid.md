@@ -1,6 +1,6 @@
 # SPEC 07 — Juego Arkanoid
 
-> **Estado:** Implementado
+> **Estado:** Aprobado
 > **Depende de:** SPEC 04, SPEC 05
 > **Fecha:** 2026-10-05
 > **Objetivo:** Portar el juego Arkanoid de `references/started-games/04-arkanoid/` a TypeScript como un motor de canvas que vive dentro del marco CRT del reproductor, publica su estado al HUD de React, se registra como `arkanoid` en la tabla `games` y guarda puntuaciones en el leaderboard.
