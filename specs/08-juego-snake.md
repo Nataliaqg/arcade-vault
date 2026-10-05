@@ -1,6 +1,6 @@
 # SPEC 08 — Juego Snake
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 04, SPEC 05
 > **Fecha:** 2026-10-05
 > **Objetivo:** Crear el juego Snake en TypeScript como un motor de canvas que vive dentro del marco CRT del reproductor, publica su estado al HUD de React, se registra como `snake` en la tabla `games` y guarda puntuaciones en el leaderboard.
@@ -23,16 +23,17 @@ El juego sigue siendo un motor imperativo que dibuja en un `<canvas>`. React lo 
 - Motor en TypeScript en `lib/games/snake/` (constantes, lógica pura, sprites, renderer y bucle), sin estado global de módulo ni acceso a `document`/`window` fuera de la factory.
 - Mecánicas:
   - Rejilla de 20 × 15 celdas de 40 px (canvas 800×600).
-  - Serpiente inicial de 3 segmentos en el centro, avanzando hacia la derecha desde el primer frame.
+  - Cuenta atrás 3-2-1 antes de cada partida (al cargar y en JUGAR DE NUEVO).
+  - Serpiente inicial de 3 segmentos en el centro, avanzando hacia la derecha al terminar la cuenta atrás.
   - Comer una fruta alarga la serpiente 1 segmento y suma puntos.
-  - Chocar con una pared o con el propio cuerpo termina la partida.
+  - Salir por un borde hace entrar por el opuesto (las paredes no matan); solo chocar con el propio cuerpo termina la partida.
   - Una sola fruta a la vez, en una celda libre aleatoria y con un sprite aleatorio.
   - El nivel sube cada 5 frutas y acelera el paso.
   - Victoria al llenar la rejilla.
 - API del motor: `createSnake(canvas, callbacks)` devuelve `{ pause, resume, restart, destroy }` y notifica con `onStateChange`.
 - Registro `snake: createSnake` en `ENGINES` (`lib/games/registry.ts`).
 - Asset `fruits.png` copiado a `public/games/snake/`, cargado dentro de la factory. Solo se usa la fila central (pixel art).
-- HUD y overlays dibujados en el canvas con la estética del Vault: puntuación, nivel, CARGANDO, PAUSA, GAME OVER y victoria.
+- HUD y overlays dibujados en el canvas con la estética del Vault: puntuación, nivel, CARGANDO, cuenta atrás, PAUSA, GAME OVER y victoria.
 - Pantalla de victoria que termina en `status: "gameover"`.
 - Pausa propia (`P` y `Escape`) enlazada a `pause`/`resume`.
 - Clase CSS `cover-snake` en `app/globals.css`.
@@ -44,7 +45,7 @@ El juego sigue siendo un motor imperativo que dibuja en un `<canvas>`. React lo 
 - Cambios en `lib/games/types.ts`, `components/game-player.tsx` o el esquema de `scores`.
 - Sonido.
 - Las filas plana y realista de `fruits.png`.
-- Frutas con valores distintos, power-ups, obstáculos y modo de atravesar bordes.
+- Frutas con valores distintos, power-ups y obstáculos.
 - Interpolación suave del movimiento entre celdas.
 - Controles táctiles (swipe) y gamepad.
 - Anti-trampas y validación de partida en servidor.
@@ -61,7 +62,7 @@ insert into public.games (id, title, short, long, cat, cover, color) values (
   'snake',
   'SNAKE',
   'Come fruta, crece sin parar y no te muerdas la cola.',
-  '<texto redactado en la implementación, mismo tono que el de asteroids, tetris y arkanoid>',
+  '<texto redactado en la implementación, mismo tono que el de asteroids, tetris y arkanoid; sin mencionar que la pared mata>',
   'ARCADE',
   'cover-snake',
   'yellow'
@@ -85,8 +86,8 @@ Estructura del motor:
 lib/games/snake/
   index.ts        ← createSnake(canvas, callbacks): GameEngine
   constants.ts    ← COLS, ROWS, CELL, W, H, INITIAL_LENGTH, FRUIT_POINTS, FRUITS_PER_LEVEL,
-                    BASE_STEP_MS, STEP_DEC_MS, MIN_STEP_MS, MAX_DT, colores del Vault
-  snake.ts        ← lógica pura: avanzar un paso, colisiones, giro válido y colocar fruta (recibe `rng`)
+                    BASE_STEP_MS, STEP_DEC_MS, MIN_STEP_MS, MAX_DT, COUNTDOWN_MS, colores del Vault
+  snake.ts        ← lógica pura: avanzar un paso (con paso por los bordes), colisión con el cuerpo, giro válido y colocar fruta (recibe `rng`)
   sprites.ts      ← FRUIT_SPRITES (22 recortes), SPRITESHEET_SRC y loadFruitSheet(src, onSettle): handle por instancia
   renderer.ts     ← rejilla, serpiente, fruta, HUD y overlays (recibe ctx y el handle)
 public/games/snake/
@@ -103,10 +104,11 @@ let body: Cell[];            // body[0] es la cabeza
 let dir: Dir;
 let turnQueue: Dir[];        // máximo 2 giros pendientes
 let fruit: { cell: Cell; sprite: number };
-let phase: "loading" | "playing" | "won" | "lost";
+let phase: "loading" | "countdown" | "playing" | "won" | "lost";
 let paused: boolean;
 let score: number, level: number, eaten: number;
 let stepAccum: number;       // ms acumulados hacia el siguiente paso
+let countdownMs: number;     // ms que faltan para empezar (cuenta atrás)
 ```
 
 Recortes de `fruits.png` (fila central, `y = 136`, alto 160). Los nombres de `sprites.js` no coinciden con la imagen (por ejemplo, el recorte `banana` en `x = 34` es una manzana), así que `FRUIT_SPRITES` usa los 22 `{ x, y, w, h }` del atlas sin nombre y se verifican contra la imagen en el paso 2.
@@ -126,9 +128,14 @@ export const ENGINES: Record<string, GameFactory> = {
 Convenciones:
 
 - **Canvas:** lógico 800×600 (4:3). La rejilla de 20 × 15 celdas de 40 px lo llena exactamente. El CSS lo escala dentro de `crt-screen`.
-- **Bucle:** `dt` en ms, limitado a 50 ms. El acumulador `stepAccum` avanza un paso cuando alcanza `stepMs = max(60, 150 − (nivel − 1) × 10)`. Como el paso mínimo (60 ms) supera el tope de `dt`, hay como mucho un paso por frame. `resume` y `restart` reinician `lastTime`.
+- **Bucle:** `dt` en ms, limitado a 50 ms. El acumulador `stepAccum` avanza un paso cuando alcanza `stepMs = max(100, 220 − (nivel − 1) × 10)`. Como el paso mínimo (100 ms) supera el tope de `dt`, hay como mucho un paso por frame. `resume` y `restart` reinician `lastTime`.
 - **Aleatoriedad:** `Math.random` solo dentro del motor, para elegir la celda y el sprite de la fruta.
 - **`onStateChange`:** solo cuando cambian `score`, `lives`, `level` o `status`. `restart` emite el estado inicial: 0 puntos, 1 vida, nivel 1, `playing`. `pause`/`resume` emiten `status`.
+- **Cuenta atrás:**
+  - Empieza cuando el spritesheet se resuelve (`onload` u `onerror`) y en `restart`. Dura `COUNTDOWN_MS = 3000` ms y el canvas muestra `ceil(countdownMs / 1000)` (3, 2, 1) en cian grande sobre el tablero.
+  - Mientras dura, `status` es `playing`, la serpiente no avanza y los giros se pueden encolar.
+  - La pausa la congela; al reanudar continúa por donde iba, sin reiniciarse.
+- **Bordes:** `advance` envuelve la cabeza con módulo (`(x + COLS) % COLS`, `(y + ROWS) % ROWS`). Las paredes no matan.
 - **Status:** mientras carga el spritesheet, `status` es `playing`, pero la partida no avanza. `won` y `lost` se publican como `gameover`.
 - **Teclado:**
   - Teclas del juego: `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `KeyW`, `KeyA`, `KeyS`, `KeyD`, `KeyP`, `Escape`, todas con `preventDefault` mientras el motor está activo.
@@ -164,6 +171,8 @@ Convenciones:
 8. Verificar el leaderboard: perder una partida, guardar `TESTER`, ver la posición y el top 5 en el modal, la fila en la pestaña SNAKE de `/salon` y en el top 10 de `/games/snake`.
 9. Probar StrictMode en `npm run dev` (sin doble bucle ni listeners duplicados), ancho móvil y portátil (1366×768), y confirmar `npm run lint`, `npx tsc --noEmit` y `npm run build`.
 
+Tras probar el juego (pasos 1–9 hechos), se acordaron tres cambios: paso inicial de 220 ms (mínimo 100 ms), cuenta atrás 3-2-1 y bordes que se atraviesan. Se reflejan en esta spec y se implementan como ajuste sobre los pasos 1, 3 y 4 (más una migración `update_game_snake_long` que reescribe el `long`).
+
 Cada paso deja la app ejecutable y es commiteable por separado. Antes de tocar componentes se consulta `node_modules/next/dist/docs/`, en particular la guía de la carpeta `public/`, según `AGENTS.md`. Cualquier ajuste visual se diseña con `/frontend-design`, según `CLAUDE.md`.
 
 ## Criterios de aceptación
@@ -189,7 +198,8 @@ Base (heredados de SPEC 04 y 05):
 Específicos de SNAKE:
 
 - [ ] El canvas es 800×600 y la rejilla de 20 × 15 celdas de 40 px lo llena entero.
-- [ ] La serpiente arranca con 3 segmentos en el centro, avanzando hacia la derecha sin pulsar ninguna tecla.
+- [ ] La serpiente arranca con 3 segmentos en el centro y, al terminar la cuenta atrás, avanza hacia la derecha sin pulsar ninguna tecla.
+- [ ] Al abrir el juego y en JUGAR DE NUEVO aparece la cuenta atrás 3-2-1 y la serpiente no se mueve hasta terminarla; pausar la congela y reanudar no la reinicia.
 - [ ] Las flechas y `W`/`A`/`S`/`D` giran la serpiente.
 - [ ] Pulsar la dirección contraria a la actual no tiene efecto.
 - [ ] Dos giros pulsados dentro del mismo paso se aplican en orden, uno por paso, y nunca producen una vuelta de 180°.
@@ -197,8 +207,8 @@ Específicos de SNAKE:
 - [ ] La fruta nunca aparece sobre la serpiente y siempre hay una sola.
 - [ ] La fruta se dibuja con un sprite de la fila pixel art de `fruits.png`, sin 404 en la consola.
 - [ ] Con la ruta de `fruits.png` rota a propósito, el juego se puede jugar con círculos de color y no hay excepciones.
-- [ ] La 5.ª fruta sube a nivel 2 y el paso pasa de 150 ms a 140 ms; desde el nivel 10 el paso es 60 ms.
-- [ ] Chocar con cualquiera de las 4 paredes muestra GAME OVER y `status` pasa a `gameover`.
+- [ ] La 5.ª fruta sube a nivel 2 y el paso pasa de 220 ms a 210 ms; desde el nivel 13 el paso es 100 ms.
+- [ ] Salir por cualquiera de los 4 bordes hace aparecer la cabeza en el borde opuesto, sin perder.
 - [ ] Chocar con el propio cuerpo muestra GAME OVER y `status` pasa a `gameover`.
 - [ ] Avanzar a la celda que la cola deja libre en ese mismo paso no mata.
 - [ ] Llenar las 300 celdas muestra la victoria, `status` pasa a `gameover` y el modal se abre con la puntuación real.
@@ -220,10 +230,10 @@ Específicos de SNAKE:
 - **Sí:** los 22 recortes de la fila central con coordenadas verificadas contra la imagen. **No:** fiarse de los nombres de `sprites.js`; no coinciden con la imagen (el recorte `banana` es una manzana).
 - **Sí:** solo la fila pixel art de `fruits.png`, por encajar con la estética arcade. **No:** las filas plana y realista.
 - **Sí:** rejilla 20 × 15 de 40 px: llena el canvas 800×600 sin letterbox. **No:** 32 × 24 de 25 px (fruta demasiado pequeña).
-- **Sí:** la pared mata. **No:** atravesar bordes; sería otra variante del juego.
+- **Sí:** los bordes se atraviesan: se sale por un lado y se entra por el opuesto, y solo morderse mata (petición del usuario tras probar el juego). **No:** que la pared mate, decisión inicial que se revierte.
 - **Sí:** `lives` fijo en `1` y `level = floor(frutas / 5) + 1`. El contrato no se amplía. **No:** 3 vidas, que se aleja del Snake clásico.
-- **Sí:** 10 × nivel por fruta y paso `max(60, 150 − (nivel − 1) × 10)` ms. **No:** puntuación plana; el nivel tiene que tener consecuencia en el ranking.
-- **Sí:** arrancar en movimiento sin esperar a una tecla, porque el criterio base exige que el juego arranque sin acción adicional. **No:** pantalla de «pulsa una tecla».
+- **Sí:** 10 × nivel por fruta y paso `max(100, 220 − (nivel − 1) × 10)` ms (más lento que el valor inicial de 150/60 ms, que resultó demasiado rápido). **No:** puntuación plana; el nivel tiene que tener consecuencia en el ranking.
+- **Sí:** cuenta atrás automática de 3 s antes de cada partida, que no exige ninguna tecla y cumple el criterio base de arrancar sin acción adicional. **No:** pantalla de «pulsa una tecla».
 - **Sí:** cola de hasta 2 giros y descarte de la vuelta de 180°. **No:** aplicar solo el último giro pulsado, que pierde giros rápidos y permite suicidarse al girar dos veces en un paso.
 - **Sí:** victoria al llenar la rejilla, con `status: "gameover"` para guardar la puntuación. **No:** bonus de victoria; sería una regla nueva.
 - **Sí:** `P` y `Escape` pausan. **No:** tecla de reinicio dentro del juego; reinicia JUGAR DE NUEVO.
@@ -244,7 +254,7 @@ Específicos de SNAKE:
 | Los nombres y anchos de `sprites.js` no coinciden con `fruits.png` | Verificar los 22 recortes contra la imagen en el paso 2 y usarlos sin nombres. |
 | `fruits.png` mide 3790 × 442 y no carga, o carga después de `destroy` | Ruta absoluta `/games/snake/…`, respaldo con círculos en `onerror`, `destroy` anula `onload`/`onerror`. |
 | Dos giros rápidos dentro de un paso provocan una vuelta de 180° | La cola valida cada giro contra el último encolado y se limita a 2. |
-| Con un `dt` grande la serpiente avanza varias celdas de golpe | `dt` ≤ 50 ms, menor que el paso mínimo de 60 ms: como mucho un paso por frame. |
+| Con un `dt` grande la serpiente avanza varias celdas de golpe | `dt` ≤ 50 ms, menor que el paso mínimo de 100 ms: como mucho un paso por frame. |
 | La rejilla casi llena hace lenta la búsqueda de una celda libre para la fruta | Elegir entre las celdas libres calculadas, no por reintentos aleatorios. |
 | El overlay PAUSA del canvas coincide con el «EN PAUSA» de `game-player` | El de React lo tapa con un fondo semitransparente; ambos dicen lo mismo. No se toca `game-player.tsx`. |
 | `INITIAL_STATE` de `game-player` asume 3 vidas antes del primer `emit` | El motor emite 1 vida al crearse; el parpadeo inicial es aceptable. |
@@ -255,7 +265,7 @@ Específicos de SNAKE:
 - Cambios en el contrato del motor, el reproductor o el esquema de `scores`.
 - Sonido.
 - Las filas plana y realista de `fruits.png`.
-- Frutas con valores distintos, power-ups, obstáculos y modo de atravesar bordes.
+- Frutas con valores distintos, power-ups y obstáculos.
 - Controles táctiles y gamepad.
 - Anti-trampas, rate limit y moderación.
 - Componente genérico `CanvasGame`.
