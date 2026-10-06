@@ -1,5 +1,6 @@
 import {
   CELL,
+  FROG_FRAMES,
   H,
   MOUTH_STARTS,
   MOUTH_WIDTH,
@@ -10,11 +11,14 @@ import {
   ROW_ROAD_BOTTOM,
   ROW_ROAD_TOP,
   ROW_START,
+  SPRITE_PAD,
   TURTLE_VISIBLE_MS,
   TURTLE_WARNING_MS,
   W,
 } from "./constants";
 import { turtleCycle, type Dir, type Entity, type Lane } from "./frogger";
+import { carSprite, truckSprite, type FroggerSprites } from "./sprites";
+import type { SkinId } from "../skins";
 import type { FroggerPalette } from "./skins";
 
 // Everything the renderer needs for one frame; the engine owns the state.
@@ -40,7 +44,18 @@ export type RenderView = {
   /** CSS font-family string, already ending in a monospace fallback. */
   fontFamily: string;
   palette: FroggerPalette;
+  skin: SkinId;
+  sprites: FroggerSprites;
+  hud: HudLayer;
 };
+
+// Score, level and lives are pre-rendered; `signature` says what the canvas shows.
+export type HudLayer = {
+  canvas: HTMLCanvasElement; // W × HUD_LAYER_H
+  signature: string;
+};
+
+export const HUD_LAYER_H = 40;
 
 const HUD_SIZE = 12;
 const HUD_MARGIN = 16;
@@ -52,6 +67,11 @@ const SUB_SIZE = 12;
 const LIFE_RADIUS = 7;
 const LIFE_GAP = 20;
 
+const SAFE_ROWS = [ROW_MEDIAN, ROW_START];
+const ROAD_DASH = [16, 16];
+const NO_DASH: number[] = [];
+const SIDES = [-1, 1];
+
 const FACING_ANGLE: Record<Dir, number> = {
   up: 0,
   right: Math.PI / 2,
@@ -59,7 +79,12 @@ const FACING_ANGLE: Record<Dir, number> = {
   left: -Math.PI / 2,
 };
 
-function glow(c: CanvasRenderingContext2D, p: FroggerPalette, color: string, blur = 10) {
+function glow(
+  c: CanvasRenderingContext2D,
+  p: FroggerPalette,
+  color: string,
+  blur = 10,
+) {
   c.shadowColor = color;
   c.shadowBlur = blur * p.glow;
 }
@@ -68,7 +93,14 @@ function noGlow(c: CanvasRenderingContext2D) {
   c.shadowBlur = 0;
 }
 
-function box(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+function box(
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
   if (r === 0) {
     c.fillRect(x, y, w, h);
     return;
@@ -78,9 +110,11 @@ function box(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: nu
   c.fill();
 }
 
-function drawZones(c: CanvasRenderingContext2D, v: RenderView) {
-  const p = v.palette;
-
+// Everything in the field that never moves; painted once into the background sprite.
+export function paintStaticZones(
+  c: CanvasRenderingContext2D,
+  p: FroggerPalette,
+) {
   // Hedge row with a bay (mouth) every four columns.
   c.fillStyle = p.safe;
   c.fillRect(0, ROW_GOALS * CELL, W, CELL);
@@ -93,12 +127,42 @@ function drawZones(c: CanvasRenderingContext2D, v: RenderView) {
     c.strokeRect(x + 1, ROW_GOALS * CELL + 1, MOUTH_WIDTH * CELL - 2, CELL - 2);
   }
 
-  // River with slow drifting ripples.
+  // River (the ripples are drawn per frame by drawRipples).
   const riverTop = ROW_RIVER_TOP * CELL;
   const riverH = (ROW_RIVER_BOTTOM - ROW_RIVER_TOP + 1) * CELL;
   c.fillStyle = p.river;
   c.fillRect(0, riverTop, W, riverH);
-  c.strokeStyle = p.riverWave;
+
+  // Safe strips: median and start.
+  for (const row of SAFE_ROWS) {
+    c.fillStyle = p.safe;
+    c.fillRect(0, row * CELL, W, CELL);
+    c.fillStyle = p.safeEdge;
+    c.fillRect(0, row * CELL + (row === ROW_MEDIAN ? 0 : CELL - 2), W, 2);
+  }
+
+  // Road with dashed lane dividers.
+  c.fillStyle = p.road;
+  c.fillRect(
+    0,
+    ROW_ROAD_TOP * CELL,
+    W,
+    (ROW_ROAD_BOTTOM - ROW_ROAD_TOP + 1) * CELL,
+  );
+  c.strokeStyle = p.roadLine;
+  c.lineWidth = 2;
+  c.setLineDash(ROAD_DASH);
+  c.beginPath();
+  for (let row = ROW_ROAD_TOP + 1; row <= ROW_ROAD_BOTTOM; row++) {
+    c.moveTo(0, row * CELL);
+    c.lineTo(W, row * CELL);
+  }
+  c.stroke();
+  c.setLineDash(NO_DASH);
+}
+
+function drawRipples(c: CanvasRenderingContext2D, v: RenderView) {
+  c.strokeStyle = v.palette.riverWave;
   c.lineWidth = 2;
   const drift = (v.clockMs / 60) % 80;
   c.beginPath();
@@ -110,34 +174,20 @@ function drawZones(c: CanvasRenderingContext2D, v: RenderView) {
     }
   }
   c.stroke();
-
-  // Safe strips: median and start.
-  for (const row of [ROW_MEDIAN, ROW_START]) {
-    c.fillStyle = p.safe;
-    c.fillRect(0, row * CELL, W, CELL);
-    c.fillStyle = p.safeEdge;
-    c.fillRect(0, row * CELL + (row === ROW_MEDIAN ? 0 : CELL - 2), W, 2);
-  }
-
-  // Road with dashed lane dividers.
-  c.fillStyle = p.road;
-  c.fillRect(0, ROW_ROAD_TOP * CELL, W, (ROW_ROAD_BOTTOM - ROW_ROAD_TOP + 1) * CELL);
-  c.strokeStyle = p.roadLine;
-  c.lineWidth = 2;
-  c.setLineDash([16, 16]);
-  c.beginPath();
-  for (let row = ROW_ROAD_TOP + 1; row <= ROW_ROAD_BOTTOM; row++) {
-    c.moveTo(0, row * CELL);
-    c.lineTo(W, row * CELL);
-  }
-  c.stroke();
-  c.setLineDash([]);
 }
 
-function drawCar(c: CanvasRenderingContext2D, p: FroggerPalette, e: Entity, dir: 1 | -1, y: number) {
-  const x = e.col * CELL;
-  const w = e.width * CELL;
-  const color = p.carColors[e.variant % p.carColors.length];
+// Sprite painters: draw at (x, y) with glow. They run once per sprite, not per frame.
+export function paintCar(
+  c: CanvasRenderingContext2D,
+  p: FroggerPalette,
+  colorIdx: number,
+  widthCells: number,
+  dir: 1 | -1,
+) {
+  const x = 0;
+  const y = 0;
+  const w = widthCells * CELL;
+  const color = p.carColors[colorIdx % p.carColors.length];
   c.fillStyle = color;
   glow(c, p, color, 8);
   box(c, x + 3, y + 7, w - 6, CELL - 14, p.radius);
@@ -146,17 +196,28 @@ function drawCar(c: CanvasRenderingContext2D, p: FroggerPalette, e: Entity, dir:
   // Windshield at the front, wheels at both ends.
   c.fillStyle = p.carGlass;
   const glassW = Math.min(10, w * 0.3);
-  c.fillRect(dir === 1 ? x + w - 3 - glassW - 3 : x + 6, y + 11, glassW, CELL - 22);
+  c.fillRect(
+    dir === 1 ? x + w - 3 - glassW - 3 : x + 6,
+    y + 11,
+    glassW,
+    CELL - 22,
+  );
   c.fillStyle = p.wheel;
-  for (const wx of [x + 10, x + w - 14]) {
-    c.fillRect(wx, y + 4, 6, 4);
-    c.fillRect(wx, y + CELL - 8, 6, 4);
-  }
+  c.fillRect(x + 10, y + 4, 6, 4);
+  c.fillRect(x + 10, y + CELL - 8, 6, 4);
+  c.fillRect(x + w - 14, y + 4, 6, 4);
+  c.fillRect(x + w - 14, y + CELL - 8, 6, 4);
 }
 
-function drawTruck(c: CanvasRenderingContext2D, p: FroggerPalette, e: Entity, dir: 1 | -1, y: number) {
-  const x = e.col * CELL;
-  const w = e.width * CELL;
+export function paintTruck(
+  c: CanvasRenderingContext2D,
+  p: FroggerPalette,
+  widthCells: number,
+  dir: 1 | -1,
+) {
+  const x = 0;
+  const y = 0;
+  const w = widthCells * CELL;
   const cabW = CELL - 4;
   const trailerX = dir === 1 ? x + 2 : x + 2 + cabW;
   const cabX = dir === 1 ? x + w - 2 - cabW : x + 2;
@@ -177,7 +238,12 @@ function drawTruck(c: CanvasRenderingContext2D, p: FroggerPalette, e: Entity, di
   }
 }
 
-function drawLog(c: CanvasRenderingContext2D, p: FroggerPalette, e: Entity, y: number) {
+function drawLog(
+  c: CanvasRenderingContext2D,
+  p: FroggerPalette,
+  e: Entity,
+  y: number,
+) {
   const x = e.col * CELL;
   const w = e.width * CELL;
   c.fillStyle = p.log;
@@ -194,7 +260,12 @@ function drawLog(c: CanvasRenderingContext2D, p: FroggerPalette, e: Entity, y: n
   c.stroke();
 }
 
-function drawTurtles(c: CanvasRenderingContext2D, v: RenderView, e: Entity, y: number) {
+function drawTurtles(
+  c: CanvasRenderingContext2D,
+  v: RenderView,
+  e: Entity,
+  y: number,
+) {
   const p = v.palette;
   const cycle = turtleCycle(e, v.clockMs);
   const submerged = cycle >= TURTLE_VISIBLE_MS;
@@ -237,16 +308,33 @@ function drawLanes(c: CanvasRenderingContext2D, v: RenderView) {
   for (const lane of v.lanes) {
     const y = lane.row * CELL;
     for (const e of lane.entities) {
-      if (e.kind === "car") drawCar(c, p, e, lane.dir, y);
-      else if (e.kind === "truck") drawTruck(c, p, e, lane.dir, y);
-      else if (e.kind === "log") drawLog(c, p, e, y);
+      // Lanes wrap over more columns than are visible: skip what is off-canvas.
+      const left = e.col * CELL;
+      if (left + e.width * CELL < 0 || left > W) continue;
+      if (e.kind === "car") {
+        c.drawImage(
+          carSprite(v.sprites, p, e.variant, e.width, lane.dir),
+          left - SPRITE_PAD,
+          y - SPRITE_PAD,
+        );
+      } else if (e.kind === "truck") {
+        c.drawImage(
+          truckSprite(v.sprites, p, e.width, lane.dir),
+          left - SPRITE_PAD,
+          y - SPRITE_PAD,
+        );
+      } else if (e.kind === "log") drawLog(c, p, e, y);
       else drawTurtles(c, v, e, y);
     }
   }
 }
 
 // Draws a frog centered on (0, 0) facing up, scaled; `jump` stretches the legs.
-function frogShape(c: CanvasRenderingContext2D, p: FroggerPalette, jump: number) {
+function frogShape(
+  c: CanvasRenderingContext2D,
+  p: FroggerPalette,
+  jump: number,
+) {
   const stretch = Math.sin(jump * Math.PI); // 0 at both ends of the jump, 1 mid-air
   c.fillStyle = p.frog;
   // Legs: back pair and front pair, swept out while jumping.
@@ -265,7 +353,7 @@ function frogShape(c: CanvasRenderingContext2D, p: FroggerPalette, jump: number)
   c.ellipse(0, 3, 6, 7, 0, 0, Math.PI * 2);
   c.fill();
 
-  for (const side of [-1, 1]) {
+  for (const side of SIDES) {
     c.fillStyle = p.eyeWhite;
     c.beginPath();
     c.arc(side * 6, -10, 3.6, 0, Math.PI * 2);
@@ -277,52 +365,70 @@ function frogShape(c: CanvasRenderingContext2D, p: FroggerPalette, jump: number)
   }
 }
 
-function drawFrog(c: CanvasRenderingContext2D, v: RenderView) {
-  if (v.frog.hidden) return;
-  const p = v.palette;
-  const cx = (v.frog.x + 0.5) * CELL;
-  const cy = (v.frog.y + 0.5) * CELL;
-  c.save();
-  c.translate(cx, cy);
-
-  if (v.frog.dead) {
-    c.strokeStyle = p.frogDead;
-    glow(c, p, p.frogDead, 14);
-    c.lineWidth = 5;
-    c.beginPath();
-    c.moveTo(-11, -11);
-    c.lineTo(11, 11);
-    c.moveTo(11, -11);
-    c.lineTo(-11, 11);
-    c.stroke();
-    c.restore();
-    noGlow(c);
-    return;
-  }
-
-  c.rotate(FACING_ANGLE[v.frog.facing]);
+export function paintLiveFrog(
+  c: CanvasRenderingContext2D,
+  p: FroggerPalette,
+  jump: number,
+) {
   glow(c, p, p.frog, 12);
-  frogShape(c, p, v.frog.jump);
-  c.restore();
+  frogShape(c, p, jump);
   noGlow(c);
 }
 
+export function paintMouthFrog(c: CanvasRenderingContext2D, p: FroggerPalette) {
+  c.scale(0.9, 0.9);
+  glow(c, p, p.frog, 10);
+  frogShape(c, p, 0);
+  noGlow(c);
+}
+
+export function paintDeadFrog(c: CanvasRenderingContext2D, p: FroggerPalette) {
+  c.strokeStyle = p.frogDead;
+  glow(c, p, p.frogDead, 14);
+  c.lineWidth = 5;
+  c.beginPath();
+  c.moveTo(-11, -11);
+  c.lineTo(11, 11);
+  c.moveTo(11, -11);
+  c.lineTo(-11, 11);
+  c.stroke();
+  noGlow(c);
+}
+
+// Frog sprites are centered in a square of this half-size.
+const FROG_HALF = CELL / 2 + SPRITE_PAD;
+
+function drawFrog(c: CanvasRenderingContext2D, v: RenderView) {
+  if (v.frog.hidden) return;
+  const s = v.sprites;
+  const cx = (v.frog.x + 0.5) * CELL;
+  const cy = (v.frog.y + 0.5) * CELL;
+
+  if (v.frog.dead) {
+    c.drawImage(s.deadFrog, cx - FROG_HALF, cy - FROG_HALF);
+    return;
+  }
+
+  const sprite = s.frog[Math.round(v.frog.jump * (FROG_FRAMES - 1))];
+  c.save();
+  c.translate(cx, cy);
+  c.rotate(FACING_ANGLE[v.frog.facing]);
+  c.drawImage(sprite, -FROG_HALF, -FROG_HALF);
+  c.restore();
+}
+
 function drawMouthFrogs(c: CanvasRenderingContext2D, v: RenderView) {
-  const p = v.palette;
   MOUTH_STARTS.forEach((start, i) => {
     if (!v.occupied[i]) return;
-    c.save();
-    c.translate((start + MOUTH_WIDTH / 2) * CELL, ROW_GOALS * CELL + CELL / 2);
-    c.scale(0.9, 0.9);
-    glow(c, p, p.frog, 10);
-    frogShape(c, p, 0);
-    c.restore();
-    noGlow(c);
+    const cx = (start + MOUTH_WIDTH / 2) * CELL;
+    const cy = ROW_GOALS * CELL + CELL / 2;
+    c.drawImage(v.sprites.mouthFrog, cx - FROG_HALF, cy - FROG_HALF);
   });
 }
 
-function drawHud(c: CanvasRenderingContext2D, v: RenderView) {
+function paintHudLayer(c: CanvasRenderingContext2D, v: RenderView) {
   const p = v.palette;
+  c.clearRect(0, 0, W, HUD_LAYER_H);
   c.font = `${HUD_SIZE}px ${v.fontFamily}`;
   c.textBaseline = "middle";
   const y = 14;
@@ -343,10 +449,27 @@ function drawHud(c: CanvasRenderingContext2D, v: RenderView) {
   glow(c, p, p.life, 8);
   for (let i = 0; i < v.lives; i++) {
     c.beginPath();
-    c.arc(W - HUD_MARGIN - LIFE_RADIUS - i * LIFE_GAP, y, LIFE_RADIUS, 0, Math.PI * 2);
+    c.arc(
+      W - HUD_MARGIN - LIFE_RADIUS - i * LIFE_GAP,
+      y,
+      LIFE_RADIUS,
+      0,
+      Math.PI * 2,
+    );
     c.fill();
   }
   noGlow(c);
+}
+
+function drawHud(c: CanvasRenderingContext2D, v: RenderView) {
+  const p = v.palette;
+  const signature = `${v.score}|${v.level}|${v.lives}|${v.skin}`;
+  if (v.hud.signature !== signature) {
+    const hc = v.hud.canvas.getContext("2d");
+    if (hc) paintHudLayer(hc, v);
+    v.hud.signature = signature;
+  }
+  c.drawImage(v.hud.canvas, 0, 0);
 
   // Time bar: green, then yellow, then magenta as the round runs out.
   const ratio = Math.max(0, Math.min(1, v.timeMs / v.roundMs));
@@ -391,15 +514,14 @@ function drawOverlay(
 
 export function draw(c: CanvasRenderingContext2D, v: RenderView) {
   const p = v.palette;
-  c.fillStyle = p.bg;
-  c.fillRect(0, 0, W, H);
-
-  drawZones(c, v);
+  c.drawImage(v.sprites.background, 0, 0);
+  drawRipples(c, v);
   drawLanes(c, v);
   drawMouthFrogs(c, v);
   drawFrog(c, v);
   drawHud(c, v);
 
   if (v.over) drawOverlay(c, v, "GAME OVER", p.titleLost, `${v.score} PUNTOS`);
-  else if (v.paused) drawOverlay(c, v, "PAUSA", p.titlePause, "P o Esc para seguir");
+  else if (v.paused)
+    drawOverlay(c, v, "PAUSA", p.titlePause, "P o Esc para seguir");
 }
