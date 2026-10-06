@@ -3,8 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "@/app/auth/actions";
+import UserMenu from "@/components/user-menu";
+import type { CurrentUser } from "@/lib/auth/session";
 
-export default function Nav() {
+export default function Nav({ user }: { user: CurrentUser | null }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -45,9 +48,13 @@ export default function Nav() {
           <span className="coin"></span>
           <span>CRÉDITOS · 03</span>
         </div>
-        <Link href="/auth" className="btn auth-btn">
-          Iniciar Sesión
-        </Link>
+        {user ? (
+          <UserMenu user={user} />
+        ) : (
+          <Link href="/auth" className="btn auth-btn">
+            Iniciar Sesión
+          </Link>
+        )}
         <button
           type="button"
           className="btn ghost hamburger"
@@ -75,9 +82,27 @@ export default function Nav() {
         <Link href="/salon" className={cls("salon")} onClick={close}>
           Salón de la Fama
         </Link>
-        <Link href="/auth" className={cls("auth")} onClick={close}>
-          Iniciar Sesión
-        </Link>
+        {!user ? (
+          <Link href="/auth" className={cls("auth")} onClick={close}>
+            Iniciar Sesión
+          </Link>
+        ) : user.username ? (
+          <>
+            <div className="mobile-user">
+              <span className="user-tag-dot" aria-hidden="true"></span>
+              {user.username}
+            </div>
+            <form action={signOut}>
+              <button type="submit" className="mobile-signout">
+                CERRAR SESIÓN
+              </button>
+            </form>
+          </>
+        ) : (
+          <Link href="/auth/alias" onClick={close}>
+            ELIGE TU ALIAS
+          </Link>
+        )}
         <div style={{ flex: 1 }}></div>
         <div
           className="pixel"

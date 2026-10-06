@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Press_Start_2P, JetBrains_Mono, Courier_Prime } from "next/font/google";
 import Nav from "@/components/nav";
 import Footer from "@/components/footer";
+import { getCurrentUser } from "@/lib/auth/session";
 import "./globals.css";
 
 const pressStart = Press_Start_2P({
@@ -27,7 +28,9 @@ export const metadata: Metadata = {
   description: "Juega online y compite por la puntuación más alta.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const user = await getCurrentUser();
+
   return (
     <html
       lang="es"
@@ -37,7 +40,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <div className="av-bg" />
         <div className="av-noise" />
         <div id="root">
-          <Nav />
+          <Nav user={user} />
           <main className="av-main">{children}</main>
           <Footer />
         </div>

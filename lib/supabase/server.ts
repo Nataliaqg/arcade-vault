@@ -26,7 +26,7 @@ export async function createClient() {
           );
         } catch {
           // Llamado desde un Server Component: no se pueden escribir cookies.
-          // Lo resolverá el proxy de sesión en la spec de auth.
+          // Lo resuelve el proxy de sesión (proxy.ts → lib/supabase/proxy.ts).
         }
       },
     },
