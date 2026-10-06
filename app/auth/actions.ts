@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { AuthError } from "@supabase/supabase-js";
 import { getCurrentUser } from "@/lib/auth/session";
-import { isValidUsername, PASSWORD_MIN } from "@/lib/auth/validation";
+import { isValidUsername, passwordErrorMessage, PASSWORD_HINT } from "@/lib/auth/validation";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuthState = {
@@ -18,7 +18,8 @@ const GENERIC_ERROR = "No se pudo completar la operación. Inténtalo de nuevo";
 const ALIAS_TAKEN = "Ese alias ya está en uso";
 const ALIAS_INVALID = "El alias debe tener de 3 a 12 caracteres: letras, números o _";
 const EMAIL_INVALID = "Escribe un correo electrónico válido";
-const PASSWORD_SHORT = `La contraseña debe tener al menos ${PASSWORD_MIN} caracteres`;
+const PASSWORD_WEAK = `La contraseña no cumple los requisitos. ${PASSWORD_HINT}`;
+const RATE_LIMITED = "Demasiados intentos. Espera unos minutos e inténtalo de nuevo";
 
 function translateError(error: Pick<AuthError, "code" | "message">): string {
   switch (error.code) {
@@ -29,11 +30,13 @@ function translateError(error: Pick<AuthError, "code" | "message">): string {
     case "user_already_exists":
       return "Ya existe una cuenta con ese email";
     case "weak_password":
-      return PASSWORD_SHORT;
+      return PASSWORD_WEAK;
     case "same_password":
       return "La nueva contraseña debe ser distinta de la anterior";
     case "over_email_send_rate_limit":
       return "Se han enviado demasiados correos. Espera unos minutos e inténtalo de nuevo";
+    case "over_request_rate_limit":
+      return RATE_LIMITED;
     default:
       // El trigger de profiles falla si el alias choca con el índice único.
       if (error.message.includes("Database error")) return ALIAS_TAKEN;
@@ -80,7 +83,8 @@ export async function signUp(_prev: AuthState, form: FormData): Promise<AuthStat
 
   if (!isValidUsername(username)) return { error: ALIAS_INVALID, email };
   if (!looksLikeEmail(email)) return { error: EMAIL_INVALID, email };
-  if (password.length < PASSWORD_MIN) return { error: PASSWORD_SHORT, email };
+  const passwordError = passwordErrorMessage(password);
+  if (passwordError) return { error: passwordError, email };
 
   const supabase = await createClient();
 
@@ -150,7 +154,8 @@ export async function updatePassword(
   form: FormData,
 ): Promise<AuthState> {
   const password = typeof form.get("password") === "string" ? (form.get("password") as string) : "";
-  if (password.length < PASSWORD_MIN) return { error: PASSWORD_SHORT };
+  const passwordError = passwordErrorMessage(password);
+  if (passwordError) return { error: passwordError };
 
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ password });
