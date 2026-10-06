@@ -9,7 +9,7 @@ import {
   signUp,
   type AuthState,
 } from "@/app/auth/actions";
-import { PASSWORD_MIN } from "@/lib/auth/validation";
+import { PASSWORD_HINT, passwordErrorMessage } from "@/lib/auth/validation";
 
 const INITIAL: AuthState = {};
 
@@ -62,10 +62,27 @@ export default function AuthForm({
   const [inState, inAction, inPending] = useActionState(signIn, INITIAL);
   const [upState, upAction, upPending] = useActionState(signUp, INITIAL);
   const [dismissedMail, setDismissedMail] = useState<AuthState | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const showCheckMail = tab === "up" && upState.sent && upState !== dismissedMail;
   const state = tab === "in" ? inState : upState;
   const pending = tab === "in" ? inPending : upPending;
+
+  function changeTab(next: "in" | "up") {
+    setTab(next);
+    setPasswordError(null);
+  }
+
+  // Evita mandar a Supabase una contraseña que sabemos que no pasará la regex.
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (tab !== "up") return;
+    const password = new FormData(e.currentTarget).get("password");
+    const error = passwordErrorMessage(typeof password === "string" ? password : "");
+    if (error) {
+      e.preventDefault();
+      setPasswordError(error);
+    }
+  }
 
   return (
     <div className="av-auth-wrap fade-in">
@@ -99,15 +116,15 @@ export default function AuthForm({
         ) : (
           <>
             <div className="auth-tabs">
-              <button type="button" className={tab === "in" ? "on" : ""} onClick={() => setTab("in")}>
+              <button type="button" className={tab === "in" ? "on" : ""} onClick={() => changeTab("in")}>
                 INICIAR SESIÓN
               </button>
-              <button type="button" className={tab === "up" ? "on" : ""} onClick={() => setTab("up")}>
+              <button type="button" className={tab === "up" ? "on" : ""} onClick={() => changeTab("up")}>
                 CREAR CUENTA
               </button>
             </div>
 
-            <form action={tab === "in" ? inAction : upAction} key={tab}>
+            <form action={tab === "in" ? inAction : upAction} onSubmit={onSubmit} key={tab}>
               {tab === "up" && (
                 <div className="field">
                   <label htmlFor="auth-username">Alias</label>
@@ -144,14 +161,20 @@ export default function AuthForm({
                   type="password"
                   placeholder="••••••••"
                   autoComplete={tab === "in" ? "current-password" : "new-password"}
-                  minLength={tab === "up" ? PASSWORD_MIN : undefined}
+                  aria-describedby={tab === "up" ? "auth-password-hint" : undefined}
+                  onChange={() => passwordError && setPasswordError(null)}
                   required
                 />
+                {tab === "up" && (
+                  <p id="auth-password-hint" className="field-hint">
+                    {PASSWORD_HINT}
+                  </p>
+                )}
               </div>
 
-              {state.error && (
+              {(passwordError ?? state.error) && (
                 <p className="auth-error" role="alert">
-                  {state.error}
+                  {passwordError ?? state.error}
                 </p>
               )}
               {tab === "in" && inState.unconfirmed && inState.email && (

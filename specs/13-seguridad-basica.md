@@ -1,6 +1,6 @@
 # SPEC 13 — Seguridad básica: RLS, contraseñas, rate limit y cabeceras
 
-> **Estado:** Approved
+> **Estado:** Implementado
 > **Depende de:** SPEC 03, SPEC 12
 > **Fecha:** 2026-10-06
 > **Objetivo:** Cerrar el checklist de seguridad básico (RLS verificada, función `rls_auto_enable` sin acceso público, contraseña fuerte de 8+ caracteres validada en UI, servidor y Supabase, límite de registros por IP, cabeceras HTTP de seguridad y protección de rutas de cuenta en `proxy.ts`), dejando documentado lo que el plan Free no permite.

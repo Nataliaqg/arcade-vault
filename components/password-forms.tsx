@@ -1,13 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import {
   requestPasswordReset,
   updatePassword,
   type AuthState,
 } from "@/app/auth/actions";
-import { PASSWORD_MIN } from "@/lib/auth/validation";
+import { PASSWORD_HINT, passwordErrorMessage } from "@/lib/auth/validation";
 
 const INITIAL: AuthState = {};
 
@@ -77,10 +77,21 @@ export function ForgotForm() {
 
 export function ResetForm() {
   const [state, action, pending] = useActionState(updatePassword, INITIAL);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  // Evita mandar a Supabase una contraseña que sabemos que no pasará la regex.
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    const password = new FormData(e.currentTarget).get("password");
+    const error = passwordErrorMessage(typeof password === "string" ? password : "");
+    if (error) {
+      e.preventDefault();
+      setPasswordError(error);
+    }
+  }
 
   return (
     <Shell title="NUEVA CONTRASEÑA">
-      <form action={action}>
+      <form action={action} onSubmit={onSubmit}>
         <div className="field">
           <label htmlFor="reset-password">Contraseña nueva</label>
           <input
@@ -89,13 +100,17 @@ export function ResetForm() {
             type="password"
             placeholder="••••••••"
             autoComplete="new-password"
-            minLength={PASSWORD_MIN}
+            aria-describedby="reset-password-hint"
+            onChange={() => passwordError && setPasswordError(null)}
             required
           />
+          <p id="reset-password-hint" className="field-hint">
+            {PASSWORD_HINT}
+          </p>
         </div>
-        {state.error && (
+        {(passwordError ?? state.error) && (
           <p className="auth-error" role="alert">
-            {state.error}
+            {passwordError ?? state.error}
           </p>
         )}
         <button className="btn lg" type="submit" disabled={pending} style={{ width: "100%", marginTop: 8 }}>
