@@ -1,3 +1,4 @@
+import type { SkinId } from "../skins";
 import type { GameStatus } from "../types";
 import type { Board } from "./board";
 import { ghostY } from "./board";
@@ -9,10 +10,12 @@ import {
   H,
   PANEL_X,
   ROWS,
+  SPRITE_PAD,
   W,
 } from "./constants";
 import type { Piece } from "./piece";
 import type { TetrisPalette } from "./skins";
+import type { TetrisSprites } from "./sprites";
 
 // Everything the renderer needs for one frame; the engine owns the state.
 export type RenderView = {
@@ -24,13 +27,37 @@ export type RenderView = {
   level: number;
   status: GameStatus;
   palette: TetrisPalette;
+  skin: SkinId;
+  sprites: TetrisSprites;
+  hud: HudLayer;
+};
+
+// Score, lines and level values are pre-rendered; `signature` says what the canvas shows.
+export type HudLayer = {
+  canvas: HTMLCanvasElement; // HUD_LAYER_W × HUD_LAYER_H, placed at (HUD_LAYER_X, 0)
+  signature: string;
 };
 
 const MONO = "'Courier New', Courier, monospace";
 const SANS = "system-ui, -apple-system, sans-serif";
+const LABEL_FONT = `bold 11px ${SANS}`;
+const VALUE_FONT = `bold 26px ${MONO}`;
+const CONTROLS_FONT = `12px ${SANS}`;
+const TITLE_FONT = `800 40px ${SANS}`;
+const SUB_FONT = `16px ${MONO}`;
 
 const NEXT_SIZE = 120;
 const NEXT_Y = 296;
+
+// Stat rows: label baseline; the value sits 32 px below.
+const SCORE_Y = 40;
+const LINES_Y = 120;
+const LEVEL_Y = 200;
+
+// The HUD layer covers the three stat values plus room for their glow.
+export const HUD_LAYER_X = PANEL_X - SPRITE_PAD;
+export const HUD_LAYER_W = W - HUD_LAYER_X;
+export const HUD_LAYER_H = 260;
 
 const CONTROLS: [string, string][] = [
   ["← →", "mover"],
@@ -40,21 +67,16 @@ const CONTROLS: [string, string][] = [
   ["P", "pausa"],
 ];
 
-// Draws one cell at grid position (x, y) inside the area whose origin is (ox, oy).
-function drawBlock(
+// Paints one block whose top-left corner is (left, top). Runs once per sprite, not per frame.
+export function paintBlock(
   c: CanvasRenderingContext2D,
   p: TetrisPalette,
-  ox: number,
-  oy: number,
-  x: number,
-  y: number,
+  left: number,
+  top: number,
   colorIndex: number,
   size: number,
-  alpha = 1,
+  alpha: number,
 ) {
-  if (!colorIndex) return;
-  const left = ox + x * size + 1;
-  const top = oy + y * size + 1;
   c.globalAlpha = alpha;
   const color = p.pieces[colorIndex] ?? p.accent;
   c.fillStyle = color;
@@ -74,7 +96,23 @@ function drawBlock(
   c.globalAlpha = 1;
 }
 
-function drawGrid(c: CanvasRenderingContext2D, p: TetrisPalette) {
+// Composes the cached sprite of one cell at grid position (x, y) inside the area at (ox, oy).
+function drawBlock(
+  c: CanvasRenderingContext2D,
+  sprites: (HTMLCanvasElement | null)[],
+  ox: number,
+  oy: number,
+  x: number,
+  y: number,
+  colorIndex: number,
+) {
+  if (!colorIndex) return;
+  const sprite = sprites[colorIndex];
+  if (!sprite) return;
+  c.drawImage(sprite, ox + x * BLOCK - SPRITE_PAD, oy + y * BLOCK - SPRITE_PAD);
+}
+
+function paintGrid(c: CanvasRenderingContext2D, p: TetrisPalette) {
   c.strokeStyle = p.gridLine;
   c.lineWidth = 0.5;
   c.beginPath();
@@ -89,31 +127,8 @@ function drawGrid(c: CanvasRenderingContext2D, p: TetrisPalette) {
   c.stroke();
 }
 
-function drawBoard(c: CanvasRenderingContext2D, v: RenderView) {
-  const p = v.palette;
-  c.fillStyle = p.boardBg;
-  c.fillRect(BOARD_X, BOARD_Y, COLS * BLOCK, ROWS * BLOCK);
-  drawGrid(c, p);
-
-  for (let r = 0; r < ROWS; r++) {
-    for (let col = 0; col < COLS; col++) {
-      drawBlock(c, p, BOARD_X, BOARD_Y, col, r, v.board[r][col], BLOCK);
-    }
-  }
-
-  const { current } = v;
-  const gy = ghostY(v.board, current);
-  for (let r = 0; r < current.shape.length; r++) {
-    for (let col = 0; col < current.shape[r].length; col++) {
-      drawBlock(c, p, BOARD_X, BOARD_Y, current.x + col, gy + r, current.shape[r][col], BLOCK, p.ghostAlpha);
-    }
-  }
-  for (let r = 0; r < current.shape.length; r++) {
-    for (let col = 0; col < current.shape[r].length; col++) {
-      drawBlock(c, p, BOARD_X, BOARD_Y, current.x + col, current.y + r, current.shape[r][col], BLOCK);
-    }
-  }
-
+// Board frame with its glow; cached in its own sprite because it goes over the blocks.
+export function paintBorder(c: CanvasRenderingContext2D, p: TetrisPalette) {
   c.strokeStyle = p.border;
   c.shadowColor = p.border;
   c.shadowBlur = 10 * p.glow;
@@ -122,53 +137,19 @@ function drawBoard(c: CanvasRenderingContext2D, v: RenderView) {
   c.shadowBlur = 0;
 }
 
-function drawStat(c: CanvasRenderingContext2D, p: TetrisPalette, label: string, value: string, y: number) {
+function paintLabel(c: CanvasRenderingContext2D, p: TetrisPalette, label: string, y: number) {
   c.textAlign = "left";
   c.textBaseline = "alphabetic";
   c.fillStyle = p.label;
-  c.font = `bold 11px ${SANS}`;
+  c.font = LABEL_FONT;
   c.fillText(label, PANEL_X, y);
-  c.fillStyle = p.accent;
-  c.shadowColor = p.accent;
-  c.shadowBlur = 8 * p.glow;
-  c.font = `bold 26px ${MONO}`;
-  c.fillText(value, PANEL_X, y + 32);
-  c.shadowBlur = 0;
 }
 
-function drawNext(c: CanvasRenderingContext2D, p: TetrisPalette, next: Piece) {
-  c.fillStyle = p.label;
-  c.font = `bold 11px ${SANS}`;
-  c.textAlign = "left";
-  c.textBaseline = "alphabetic";
-  c.fillText("NEXT", PANEL_X, NEXT_Y - 12);
-
-  c.fillStyle = p.boardBg;
-  c.fillRect(PANEL_X, NEXT_Y, NEXT_SIZE, NEXT_SIZE);
-  c.strokeStyle = p.border;
-  c.lineWidth = 1;
-  c.strokeRect(PANEL_X + 0.5, NEXT_Y + 0.5, NEXT_SIZE - 1, NEXT_SIZE - 1);
-
-  // The preview grid is 4×4 cells of BLOCK px; center the piece inside it.
-  const { shape } = next;
-  const offX = Math.floor((4 - shape[0].length) / 2);
-  const offY = Math.floor((4 - shape.length) / 2);
-  for (let r = 0; r < shape.length; r++) {
-    for (let col = 0; col < shape[r].length; col++) {
-      drawBlock(c, p, PANEL_X, NEXT_Y, offX + col, offY + r, shape[r][col], BLOCK);
-    }
-  }
-}
-
-function drawControls(c: CanvasRenderingContext2D, p: TetrisPalette) {
+function paintControls(c: CanvasRenderingContext2D, p: TetrisPalette) {
   const top = 450;
-  c.textAlign = "left";
-  c.textBaseline = "alphabetic";
-  c.fillStyle = p.label;
-  c.font = `bold 11px ${SANS}`;
-  c.fillText("CONTROLS", PANEL_X, top);
+  paintLabel(c, p, "CONTROLS", top);
 
-  c.font = `12px ${SANS}`;
+  c.font = CONTROLS_FONT;
   CONTROLS.forEach(([key, action], i) => {
     const y = top + 24 + i * 22;
     c.fillStyle = p.key;
@@ -178,15 +159,98 @@ function drawControls(c: CanvasRenderingContext2D, p: TetrisPalette) {
   });
 }
 
-function drawPanel(c: CanvasRenderingContext2D, v: RenderView) {
-  const p = v.palette;
-  drawStat(c, p, "SCORE", v.score.toLocaleString("es-ES"), 40);
-  drawStat(c, p, "LINES", String(v.lines), 120);
-  drawStat(c, p, "LEVEL", String(v.level), 200);
-  drawNext(c, p, v.next);
-  drawControls(c, p);
+// Everything that never moves; painted once per skin into the background sprite.
+export function paintBackground(c: CanvasRenderingContext2D, p: TetrisPalette) {
+  c.fillStyle = p.pageBg;
+  c.fillRect(0, 0, W, H);
+
+  c.fillStyle = p.boardBg;
+  c.fillRect(BOARD_X, BOARD_Y, COLS * BLOCK, ROWS * BLOCK);
+  paintGrid(c, p);
+
+  paintLabel(c, p, "SCORE", SCORE_Y);
+  paintLabel(c, p, "LINES", LINES_Y);
+  paintLabel(c, p, "LEVEL", LEVEL_Y);
+
+  paintLabel(c, p, "NEXT", NEXT_Y - 12);
+  c.fillStyle = p.boardBg;
+  c.fillRect(PANEL_X, NEXT_Y, NEXT_SIZE, NEXT_SIZE);
+  c.strokeStyle = p.border;
+  c.lineWidth = 1;
+  c.strokeRect(PANEL_X + 0.5, NEXT_Y + 0.5, NEXT_SIZE - 1, NEXT_SIZE - 1);
+
+  paintControls(c, p);
 }
 
+function drawBoard(c: CanvasRenderingContext2D, v: RenderView) {
+  const s = v.sprites;
+  for (let r = 0; r < ROWS; r++) {
+    const row = v.board[r];
+    for (let col = 0; col < COLS; col++) {
+      drawBlock(c, s.block, BOARD_X, BOARD_Y, col, r, row[col]);
+    }
+  }
+
+  const { current } = v;
+  const { shape } = current;
+  const gy = ghostY(v.board, current);
+  for (let r = 0; r < shape.length; r++) {
+    for (let col = 0; col < shape[r].length; col++) {
+      drawBlock(c, s.ghost, BOARD_X, BOARD_Y, current.x + col, gy + r, shape[r][col]);
+    }
+  }
+  for (let r = 0; r < shape.length; r++) {
+    for (let col = 0; col < shape[r].length; col++) {
+      drawBlock(c, s.block, BOARD_X, BOARD_Y, current.x + col, current.y + r, shape[r][col]);
+    }
+  }
+
+  c.drawImage(s.border, BOARD_X - SPRITE_PAD, BOARD_Y - SPRITE_PAD);
+}
+
+function paintValue(c: CanvasRenderingContext2D, p: TetrisPalette, value: string, labelY: number) {
+  c.fillStyle = p.accent;
+  c.shadowColor = p.accent;
+  c.shadowBlur = 8 * p.glow;
+  c.fillText(value, PANEL_X, labelY + 32);
+  c.shadowBlur = 0;
+}
+
+function paintHudLayer(c: CanvasRenderingContext2D, v: RenderView) {
+  const p = v.palette;
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.clearRect(0, 0, HUD_LAYER_W, HUD_LAYER_H);
+  // Paint in canvas coordinates: the layer is composed at (HUD_LAYER_X, 0).
+  c.translate(-HUD_LAYER_X, 0);
+  c.textAlign = "left";
+  c.textBaseline = "alphabetic";
+  c.font = VALUE_FONT;
+  paintValue(c, p, v.score.toLocaleString("es-ES"), SCORE_Y);
+  paintValue(c, p, String(v.lines), LINES_Y);
+  paintValue(c, p, String(v.level), LEVEL_Y);
+}
+
+function drawPanel(c: CanvasRenderingContext2D, v: RenderView) {
+  const signature = `${v.score}|${v.lines}|${v.level}|${v.skin}`;
+  if (v.hud.signature !== signature) {
+    const hc = v.hud.canvas.getContext("2d");
+    if (hc) paintHudLayer(hc, v);
+    v.hud.signature = signature;
+  }
+  c.drawImage(v.hud.canvas, HUD_LAYER_X, 0);
+
+  // The preview grid is 4×4 cells of BLOCK px; center the piece inside it.
+  const { shape } = v.next;
+  const offX = Math.floor((4 - shape[0].length) / 2);
+  const offY = Math.floor((4 - shape.length) / 2);
+  for (let r = 0; r < shape.length; r++) {
+    for (let col = 0; col < shape[r].length; col++) {
+      drawBlock(c, v.sprites.block, PANEL_X, NEXT_Y, offX + col, offY + r, shape[r][col]);
+    }
+  }
+}
+
+// Only drawn while paused or game over, when the loop has stopped: one frame each.
 function drawOverlay(c: CanvasRenderingContext2D, p: TetrisPalette, title: string, sub: string) {
   c.fillStyle = p.overlayBg;
   c.fillRect(0, 0, W, H);
@@ -195,19 +259,18 @@ function drawOverlay(c: CanvasRenderingContext2D, p: TetrisPalette, title: strin
   c.fillStyle = p.danger;
   c.shadowColor = p.danger;
   c.shadowBlur = 16 * p.glow;
-  c.font = `800 40px ${SANS}`;
+  c.font = TITLE_FONT;
   c.fillText(title, W / 2, H / 2 - 8);
   c.shadowBlur = 0;
   if (sub) {
     c.fillStyle = p.accent;
-    c.font = `16px ${MONO}`;
+    c.font = SUB_FONT;
     c.fillText(sub, W / 2, H / 2 + 28);
   }
 }
 
 export function drawFrame(c: CanvasRenderingContext2D, v: RenderView) {
-  c.fillStyle = v.palette.pageBg;
-  c.fillRect(0, 0, W, H);
+  c.drawImage(v.sprites.background, 0, 0);
 
   drawBoard(c, v);
   drawPanel(c, v);

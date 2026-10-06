@@ -33,5 +33,8 @@ export const BASE_DROP_INTERVAL = 1000; // ms
 export const LEVEL_SPEEDUP = 90; // ms faster per level
 export const MIN_DROP_INTERVAL = 100; // ms
 
+// Margin around each cached sprite so the glow (max shadowBlur 10) is not clipped.
+export const SPRITE_PAD = 16;
+
 // Horizontal offsets tried when a rotation collides.
 export const KICKS = [0, -1, 1, -2, 2];

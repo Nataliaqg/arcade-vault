@@ -30,7 +30,8 @@ export class Particle {
 
   draw(ctx: CanvasRenderingContext2D, pal: AsteroidsPalette) {
     const alpha = this.ttl / this.life;
-    ctx.globalAlpha = Number(alpha.toFixed(2));
+    // Same 2-decimal quantization as before, without a string per particle per frame.
+    ctx.globalAlpha = Math.round(alpha * 100) / 100;
     ctx.strokeStyle = pal.particle;
     ctx.lineWidth = pal.pixel ? 2 : 1;
     ctx.beginPath();

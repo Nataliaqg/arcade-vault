@@ -11,11 +11,12 @@ import {
   W,
 } from "./constants";
 import { randomPiece, tryRotate, type Piece } from "./piece";
-import { drawFrame } from "./renderer";
+import { drawFrame, HUD_LAYER_H, HUD_LAYER_W, type HudLayer, type RenderView } from "./renderer";
 import { SKINS } from "./skins";
+import { buildSprites, type TetrisSprites } from "./sprites";
 
 // Keys the game uses; the page must not scroll or click buttons with them.
-const GAME_KEYS = [
+const GAME_KEYS = new Set([
   "ArrowLeft",
   "ArrowRight",
   "ArrowDown",
@@ -23,7 +24,7 @@ const GAME_KEYS = [
   "KeyX",
   "Space",
   "KeyP",
-];
+]);
 
 export function createTetris(
   canvas: HTMLCanvasElement,
@@ -36,35 +37,42 @@ export function createTetris(
   canvas.height = H;
 
   // ── Game state ──────────────────────────────────────────────────────────────
-  let board: Board;
-  let current: Piece;
-  let next: Piece;
-  let score: number;
-  let lines: number;
-  let level: number;
+  // Placeholders so the shared render view can be built; initGame() sets them.
+  let board: Board = createBoard();
+  let next: Piece = randomPiece();
+  let current: Piece = next;
+  let score = 0;
+  let lines = 0;
+  let level = 1;
   let dropInterval: number;
   let dropAccum: number;
   let gameOver: boolean;
   let paused = false;
 
   let skin: SkinId = options.skin ?? DEFAULT_SKIN;
+
+  // Sprites are built the first time a skin is used and freed in destroy().
+  let spriteCache: Partial<Record<SkinId, TetrisSprites>> = {};
+  const spritesFor = (id: SkinId): TetrisSprites => (spriteCache[id] ??= buildSprites(SKINS[id]));
+
   let lastEmitted: GameState | null = null;
 
   const status = (): GameStatus => (gameOver ? "gameover" : paused ? "paused" : "playing");
 
   // Tetris has no lives: the contract field is fixed at 1.
   const emit = () => {
-    const nextState: GameState = { score, lives: 1, level, status: status() };
+    const nextStatus = status();
     const prev = lastEmitted;
     if (
       prev &&
-      prev.score === nextState.score &&
-      prev.lives === nextState.lives &&
-      prev.level === nextState.level &&
-      prev.status === nextState.status
+      prev.score === score &&
+      prev.lives === 1 &&
+      prev.level === level &&
+      prev.status === nextStatus
     ) {
       return;
     }
+    const nextState: GameState = { score, lives: 1, level, status: nextStatus };
     lastEmitted = nextState;
     callbacks.onStateChange(nextState);
   };
@@ -135,11 +143,12 @@ export function createTetris(
     paused = false;
     lastTime = null;
     emit();
+    ensureRunning();
   }
 
   // ── Input ───────────────────────────────────────────────────────────────────
   const onKeyDown = (e: KeyboardEvent) => {
-    if (GAME_KEYS.includes(e.code)) e.preventDefault();
+    if (GAME_KEYS.has(e.code)) e.preventDefault();
 
     if (e.code === "KeyP") {
       if (paused) resume();
@@ -172,7 +181,46 @@ export function createTetris(
   let rafId = 0;
   let destroyed = false;
 
+  initGame();
+
+  const hud: HudLayer = {
+    canvas: document.createElement("canvas"),
+    signature: "",
+  };
+  hud.canvas.width = HUD_LAYER_W;
+  hud.canvas.height = HUD_LAYER_H;
+
+  // One view object, mutated each frame, so rendering allocates nothing.
+  const view: RenderView = {
+    board,
+    current,
+    next,
+    score,
+    lines,
+    level,
+    status: status(),
+    palette: SKINS[skin],
+    skin,
+    sprites: spritesFor(skin),
+    hud,
+  };
+
+  const render = () => {
+    view.board = board;
+    view.current = current;
+    view.next = next;
+    view.score = score;
+    view.lines = lines;
+    view.level = level;
+    view.status = status();
+    view.palette = SKINS[skin];
+    view.skin = skin;
+    view.sprites = spritesFor(skin);
+    drawFrame(ctx, view);
+  };
+
   const loop = (ts: number) => {
+    rafId = 0;
     if (destroyed) return;
     // dt in ms, capped at 50 to avoid a big fall after a tab blur.
     const dt = lastTime === null ? 0 : Math.min(ts - lastTime, 50);
@@ -187,15 +235,30 @@ export function createTetris(
       }
     }
 
-    drawFrame(ctx, { board, current, next, score, lines, level, status: status(), palette: SKINS[skin] });
+    render();
     emit();
-    rafId = requestAnimationFrame(loop);
+    // Paused or game over: the frame above (with its overlay) is the last one.
+    // resume() and restart() start the loop again.
+    if (!paused && !gameOver) rafId = requestAnimationFrame(loop);
   };
+
+  function ensureRunning() {
+    if (rafId !== 0 || destroyed) return;
+    lastTime = null;
+    rafId = requestAnimationFrame(loop);
+  }
+
+  // If a font loads after the engine starts, the cached text used the fallback.
+  void document.fonts?.ready.then(() => {
+    if (destroyed) return;
+    spriteCache = {};
+    hud.signature = "";
+    if (rafId === 0) render();
+  });
 
   // ── Start ───────────────────────────────────────────────────────────────────
   window.addEventListener("keydown", onKeyDown);
 
-  initGame();
   emit();
   rafId = requestAnimationFrame(loop);
 
@@ -204,17 +267,21 @@ export function createTetris(
     resume,
     setSkin(next: SkinId) {
       skin = next;
+      if (rafId === 0 && !destroyed) render();
     },
     restart() {
       if (destroyed) return;
       lastTime = null;
       initGame();
       emit();
+      ensureRunning();
     },
     destroy() {
       if (destroyed) return;
       destroyed = true;
       cancelAnimationFrame(rafId);
+      rafId = 0;
+      spriteCache = {};
       window.removeEventListener("keydown", onKeyDown);
     },
   };

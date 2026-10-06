@@ -26,17 +26,27 @@ export class Bullet {
   }
 
   draw(ctx: CanvasRenderingContext2D, pal: AsteroidsPalette) {
-    ctx.fillStyle = pal.bullet;
-    ctx.shadowColor = pal.bullet;
-    ctx.shadowBlur = 8 * pal.glow;
-    if (pal.pixel) {
-      const side = this.radius * 2 + 1;
-      ctx.fillRect(this.x - side / 2, this.y - side / 2, side, side);
-    } else {
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.shadowBlur = 0;
+    paintBullet(ctx, pal, this.x, this.y, this.radius);
   }
+}
+
+export function paintBullet(
+  ctx: CanvasRenderingContext2D,
+  pal: AsteroidsPalette,
+  x: number,
+  y: number,
+  radius: number,
+) {
+  ctx.fillStyle = pal.bullet;
+  ctx.shadowColor = pal.bullet;
+  ctx.shadowBlur = 8 * pal.glow;
+  if (pal.pixel) {
+    const side = radius * 2 + 1;
+    ctx.fillRect(x - side / 2, y - side / 2, side, side);
+  } else {
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
 }
