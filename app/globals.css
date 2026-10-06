@@ -660,6 +660,59 @@ a { color: inherit; text-decoration: none; }
   filter: drop-shadow(0 0 8px rgba(0,245,255,0.7));
 }
 
+/* FROGGER: the playfield seen from above, top to bottom: hedge (0–12%),
+   river with four logs and a frog riding one (12–52%), median (52–60%),
+   road with a car and trucks (60–92%) and the start strip. ::before paints
+   the bands, ::after the things moving on them. A box of width S% starting at
+   L% sits at background-position L/(100-S) × 100% (same for the vertical axis). */
+.cover-frogger { background: #0a0a0f; }
+.cover-frogger::before,
+.cover-frogger::after {
+  content: "";
+  position: absolute; inset: 0;
+  background-repeat: no-repeat;
+}
+.cover-frogger::before {
+  background-image:
+    repeating-linear-gradient(90deg, rgba(230,233,255,0.3) 0 14px, transparent 14px 28px),
+    linear-gradient(#0e2a18, #0e2a18),
+    linear-gradient(#15151f, #15151f),
+    linear-gradient(#0e2a18, #0e2a18),
+    linear-gradient(#0a1f3d, #0a1f3d),
+    linear-gradient(#0e2a18, #0e2a18);
+  background-size:
+    100% 2px,
+    100% 8%, 100% 32%, 100% 8%, 100% 40%, 100% 12%;
+  background-position:
+    0 76%,
+    0 100%, 0 88.235%, 0 56.522%, 0 20%, 0 0;
+}
+.cover-frogger::after {
+  background-image:
+    /* frog on the first log */
+    radial-gradient(circle at 28% 24.5%, var(--green) 0 7px, transparent 8px),
+    /* logs */
+    linear-gradient(#7a4a22, #7a4a22),
+    linear-gradient(#7a4a22, #7a4a22),
+    linear-gradient(#7a4a22, #7a4a22),
+    linear-gradient(#7a4a22, #7a4a22),
+    /* road: car, truck (body and cab), two cars */
+    linear-gradient(var(--magenta), var(--magenta)),
+    linear-gradient(#6c7199, #6c7199),
+    linear-gradient(#ff8a00, #ff8a00),
+    linear-gradient(var(--yellow), var(--yellow)),
+    linear-gradient(var(--cyan), var(--cyan));
+  background-size:
+    100% 100%,
+    34% 9%, 22% 9%, 24% 9%, 16% 9%,
+    16% 8%, 18% 8%, 8% 8%, 14% 8%, 14% 8%;
+  background-position:
+    0 0,
+    15.152% 21.978%, 79.487% 21.978%, 44.737% 39.56%, 4.762% 39.56%,
+    21.429% 69.565%, 70.732% 69.565%, 82.609% 69.565%, 34.884% 86.957%, 86.047% 86.957%;
+  filter: drop-shadow(0 0 6px rgba(57,255,20,0.45));
+}
+
 .cover-rana { background: linear-gradient(180deg,#001f2a,#0a0a18); }
 .cover-rana::after {
   content: "";

@@ -2,6 +2,7 @@ import { createArkanoid } from "./arkanoid";
 import { TOUCH_LAYOUT as arkanoidTouch } from "./arkanoid/touch";
 import { createAsteroids } from "./asteroids";
 import { TOUCH_LAYOUT as asteroidsTouch } from "./asteroids/touch";
+import { createFrogger } from "./frogger";
 import { createSnake } from "./snake";
 import { TOUCH_LAYOUT as snakeTouch } from "./snake/touch";
 import { createTetris } from "./tetris";
@@ -15,6 +16,7 @@ export const ENGINES: Record<string, GameFactory> = {
   tetris: createTetris,
   arkanoid: createArkanoid,
   snake: createSnake,
+  frogger: createFrogger,
 };
 
 // Virtual gamepad mapping (A/B buttons, auto-repeat) by game id.
