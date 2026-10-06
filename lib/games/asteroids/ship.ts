@@ -70,31 +70,30 @@ export class Ship {
     return [new Bullet(ox, oy, this.angle)];
   }
 
-  draw(ctx: CanvasRenderingContext2D, pal: AsteroidsPalette) {
-    if (this.dead) return;
+  /** False while dead or during the blink-off phase of the respawn shield. */
+  visible(): boolean {
+    if (this.dead) return false;
     // Blink while invincible after respawn
-    if (this.invincible > 0 && Math.floor(this.invincible * 8) % 2 === 0) return;
+    return !(this.invincible > 0 && Math.floor(this.invincible * 8) % 2 === 0);
+  }
+
+  draw(ctx: CanvasRenderingContext2D, pal: AsteroidsPalette) {
+    if (!this.visible()) return;
 
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    ctx.strokeStyle = pal.ship;
-    ctx.lineWidth = pal.lineWidth;
-    ctx.lineJoin = pal.pixel ? "miter" : "round";
-    ctx.shadowColor = pal.ship;
-    ctx.shadowBlur = 10 * pal.glow;
+    paintShipBody(ctx, pal);
+    this.traceFlame(ctx, pal);
+    ctx.restore();
+  }
 
-    // Classic silhouette: triangle with a rear notch
-    ctx.beginPath();
-    ctx.moveTo(20, 0); // nose
-    ctx.lineTo(-12, -9); // left wing
-    ctx.lineTo(-7, 0); // rear notch
-    ctx.lineTo(-12, 9); // right wing
-    ctx.closePath();
-    ctx.stroke();
-
-    // Thruster flame
+  /** Thruster flame around the origin (nose along +x). Changes every frame. */
+  traceFlame(ctx: CanvasRenderingContext2D, pal: AsteroidsPalette) {
     if (this.thrusting && Math.random() > 0.35) {
+      ctx.lineWidth = pal.lineWidth;
+      ctx.lineJoin = pal.pixel ? "miter" : "round";
+      ctx.shadowBlur = 10 * pal.glow;
       ctx.beginPath();
       ctx.moveTo(-8, -4);
       ctx.lineTo(-8 - rand(6, 14), 0);
@@ -103,7 +102,26 @@ export class Ship {
       ctx.shadowColor = pal.shipFlame;
       ctx.stroke();
     }
-
-    ctx.restore();
   }
+}
+
+/** Furthest point of the hull from its origin (the nose). */
+export const SHIP_EXTENT = 20;
+
+/** Ship hull around the origin, nose along +x. */
+export function paintShipBody(ctx: CanvasRenderingContext2D, pal: AsteroidsPalette) {
+  ctx.strokeStyle = pal.ship;
+  ctx.lineWidth = pal.lineWidth;
+  ctx.lineJoin = pal.pixel ? "miter" : "round";
+  ctx.shadowColor = pal.ship;
+  ctx.shadowBlur = 10 * pal.glow;
+
+  // Classic silhouette: triangle with a rear notch
+  ctx.beginPath();
+  ctx.moveTo(SHIP_EXTENT, 0); // nose
+  ctx.lineTo(-12, -9); // left wing
+  ctx.lineTo(-7, 0); // rear notch
+  ctx.lineTo(-12, 9); // right wing
+  ctx.closePath();
+  ctx.stroke();
 }

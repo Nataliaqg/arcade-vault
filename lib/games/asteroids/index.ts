@@ -7,10 +7,14 @@ import { Particle } from "./particle";
 import { PowerUp } from "./powerup";
 import { Ship } from "./ship";
 import { SKINS } from "./skins";
+import { asteroidSprite, buildSprites, type AsteroidsSprites } from "./sprites";
 import { H, W, dist, rand, type Keys } from "./utils";
 
+// Height of the cached HUD layer: text baseline at 26 and life icons (with glow) at 18.
+const HUD_LAYER_H = 40;
+
 // Keys the game uses; the page must not scroll or click buttons with them.
-const GAME_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "Space"];
+const GAME_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "Space"]);
 
 type Phase = "playing" | "dead" | "gameover";
 
@@ -29,12 +33,14 @@ export function createAsteroids(
   const justPressed: Keys = {};
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (GAME_KEYS.includes(e.code)) e.preventDefault();
+    if (GAME_KEYS.has(e.code)) e.preventDefault();
     if (!keys[e.code]) justPressed[e.code] = true;
     keys[e.code] = true;
+    // Game over with the loop stopped: SPACE restarts, so the loop must run to see it.
+    if (e.code === "Space" && phase === "gameover" && !paused) ensureRunning();
   };
   const onKeyUp = (e: KeyboardEvent) => {
-    if (GAME_KEYS.includes(e.code)) e.preventDefault();
+    if (GAME_KEYS.has(e.code)) e.preventDefault();
     keys[e.code] = false;
   };
   // Avoid stuck keys when the window loses focus.
@@ -70,17 +76,18 @@ export function createAsteroids(
     phase === "gameover" ? "gameover" : paused ? "paused" : "playing";
 
   const emit = () => {
-    const next: GameState = { score, lives, level, status: status() };
+    const nextStatus = status();
     const prev = lastEmitted;
     if (
       prev &&
-      prev.score === next.score &&
-      prev.lives === next.lives &&
-      prev.level === next.level &&
-      prev.status === next.status
+      prev.score === score &&
+      prev.lives === lives &&
+      prev.level === level &&
+      prev.status === nextStatus
     ) {
       return;
     }
+    const next: GameState = { score, lives, level, status: nextStatus };
     lastEmitted = next;
     callbacks.onStateChange(next);
   };
@@ -242,8 +249,25 @@ export function createAsteroids(
     c.restore();
   }
 
-  function drawHUD(c: CanvasRenderingContext2D) {
+  // Score, level and lives are painted into an offscreen layer and only repainted
+  // when one of them (or the skin) changes. The font is the generic `monospace`,
+  // so there is no web font to wait for.
+  const hudCanvas = document.createElement("canvas");
+  hudCanvas.width = W;
+  hudCanvas.height = HUD_LAYER_H;
+  const hudCtx = ((): CanvasRenderingContext2D => {
+    const c = hudCanvas.getContext("2d");
+    if (!c) throw new Error("Canvas 2D context not available");
+    return c;
+  })();
+  let hudScore = -1;
+  let hudLevel = -1;
+  let hudLives = -1;
+  let hudSkin: SkinId | null = null;
+
+  function paintHUD(c: CanvasRenderingContext2D) {
     const pal = SKINS[skin];
+    c.clearRect(0, 0, W, HUD_LAYER_H);
     c.shadowBlur = 0;
     c.fillStyle = pal.hudText;
     c.font = "15px monospace";
@@ -256,8 +280,24 @@ export function createAsteroids(
     c.fillText(`NIVEL ${level}`, W / 2, 26);
 
     for (let i = 0; i < lives; i++) drawLifeIcon(c, W - 16 - i * 22, 18);
+  }
 
+  function drawHUD(c: CanvasRenderingContext2D) {
+    const pal = SKINS[skin];
+    if (score !== hudScore || level !== hudLevel || lives !== hudLives || skin !== hudSkin) {
+      paintHUD(hudCtx);
+      hudScore = score;
+      hudLevel = level;
+      hudLives = lives;
+      hudSkin = skin;
+    }
+    c.shadowBlur = 0;
+    c.drawImage(hudCanvas, 0, 0);
+
+    // The bonus countdown changes every frame: drawn directly.
     if (ship.tripleShot > 0) {
+      c.font = "15px monospace";
+      c.textBaseline = "alphabetic";
       c.textAlign = "left";
       c.fillStyle = pal.hudBonus;
       c.fillText(`3x  ${ship.tripleShot.toFixed(1)}s`, 14, 46);
@@ -279,16 +319,73 @@ export function createAsteroids(
     c.fillText(sub, W / 2, H / 2 + 22);
   }
 
+  // Glow sprites per skin: built the first time a skin with glow is used, freed in
+  // destroy(). Skins without glow (null) keep the vector path.
+  let spriteCache: Partial<Record<SkinId, AsteroidsSprites | null>> = {};
+  const spritesFor = (id: SkinId): AsteroidsSprites | null => {
+    let s = spriteCache[id];
+    if (s === undefined) {
+      s = SKINS[id].glow > 0 ? buildSprites(SKINS[id]) : null;
+      spriteCache[id] = s;
+    }
+    return s;
+  };
+
+  // Composes a centered sprite at (x, y) rotated by `angle`.
+  function blit(
+    c: CanvasRenderingContext2D,
+    s: HTMLCanvasElement,
+    x: number,
+    y: number,
+    angle: number,
+  ) {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    c.setTransform(cos, sin, -sin, cos, x, y);
+    c.drawImage(s, -s.width / 2, -s.height / 2);
+    c.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
   function draw(c: CanvasRenderingContext2D) {
     const pal = SKINS[skin];
+    const sprites = spritesFor(skin);
+    c.shadowBlur = 0;
     c.fillStyle = pal.bg;
     c.fillRect(0, 0, W, H);
 
-    particles.forEach((p) => p.draw(c, pal));
-    asteroids.forEach((a) => a.draw(c, pal));
-    powerUps.forEach((p) => p.draw(c, pal));
-    bullets.forEach((b) => b.draw(c, pal));
-    ship.draw(c, pal);
+    for (const p of particles) p.draw(c, pal);
+
+    if (sprites) {
+      for (const a of asteroids) blit(c, asteroidSprite(sprites, pal, a), a.x, a.y, a.rot);
+    } else {
+      for (const a of asteroids) a.draw(c, pal);
+    }
+
+    for (const p of powerUps) p.draw(c, pal);
+
+    if (sprites) {
+      const s = sprites.bullet;
+      const half = s.width / 2;
+      c.shadowBlur = 0;
+      for (const b of bullets) c.drawImage(s, b.x - half, b.y - half);
+    } else {
+      for (const b of bullets) b.draw(c, pal);
+    }
+
+    if (sprites) {
+      if (ship.visible()) {
+        blit(c, sprites.ship, ship.x, ship.y, ship.angle);
+        // The flame has a random length every frame: it keeps its own live glow.
+        const cos = Math.cos(ship.angle);
+        const sin = Math.sin(ship.angle);
+        c.setTransform(cos, sin, -sin, cos, ship.x, ship.y);
+        ship.traceFlame(c, pal);
+        c.setTransform(1, 0, 0, 1, 0, 0);
+        c.shadowBlur = 0;
+      }
+    } else {
+      ship.draw(c, pal);
+    }
 
     drawHUD(c);
 
@@ -302,7 +399,11 @@ export function createAsteroids(
   let lastTime: number | null = null;
   let destroyed = false;
 
+  // Paused, or game over once the last explosion has faded: nothing moves.
+  const idle = () => paused || (phase === "gameover" && particles.length === 0);
+
   const loop = (ts: number) => {
+    rafId = 0;
     if (destroyed) return;
     // dt capped at 50ms to avoid a spiral of death after a tab blur.
     const dt = lastTime === null ? 0 : Math.min((ts - lastTime) / 1000, 0.05);
@@ -310,8 +411,16 @@ export function createAsteroids(
     if (!paused) update(dt);
     draw(ctx);
     emit();
-    rafId = requestAnimationFrame(loop);
+    // The frame above (with its overlay) is the last one while idle.
+    // resume(), restart() and SPACE on game over start the loop again.
+    if (!idle()) rafId = requestAnimationFrame(loop);
   };
+
+  function ensureRunning() {
+    if (rafId !== 0 || destroyed) return;
+    lastTime = null;
+    rafId = requestAnimationFrame(loop);
+  }
 
   // ── Start ───────────────────────────────────────────────────────────────────
   window.addEventListener("keydown", onKeyDown);
@@ -325,6 +434,8 @@ export function createAsteroids(
   return {
     setSkin(next: SkinId) {
       skin = next;
+      // With the loop stopped, repaint once so the new skin shows at once.
+      if (rafId === 0 && !destroyed) draw(ctx);
     },
     pause() {
       if (paused || destroyed) return;
@@ -338,6 +449,7 @@ export function createAsteroids(
       for (const code of Object.keys(justPressed)) justPressed[code] = false;
       lastTime = null;
       emit();
+      ensureRunning();
     },
     restart() {
       if (destroyed) return;
@@ -346,11 +458,14 @@ export function createAsteroids(
       lastTime = null;
       initGame();
       emit();
+      ensureRunning();
     },
     destroy() {
       if (destroyed) return;
       destroyed = true;
       cancelAnimationFrame(rafId);
+      rafId = 0;
+      spriteCache = {};
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);

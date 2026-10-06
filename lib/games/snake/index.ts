@@ -1,7 +1,7 @@
 import { DEFAULT_SKIN, type SkinId } from "../skins";
 import type { GameCallbacks, GameEngine, GameOptions, GameState, GameStatus } from "../types";
 import { COUNTDOWN_MS, H, INITIAL_LENGTH, MAX_DT, W } from "./constants";
-import { draw, type Phase } from "./renderer";
+import { countdownDigit, draw, HUD_LAYER_H, type HudLayer, type Phase, type RenderView } from "./renderer";
 import {
   advance,
   fruitScore,
@@ -14,10 +14,17 @@ import {
   type Dir,
 } from "./snake";
 import { SKINS } from "./skins";
-import { FRUIT_SPRITES, loadFruitSheet, SPRITESHEET_SRC } from "./sprites";
+import {
+  buildSprites,
+  FRUIT_SPRITES,
+  loadFruitSheet,
+  SPRITESHEET_SRC,
+  type FruitSheet,
+  type SnakeSprites,
+} from "./sprites";
 
 // Keys the game uses; the page must not scroll or click buttons with them.
-const GAME_KEYS = [
+const GAME_KEYS = new Set([
   "ArrowUp",
   "ArrowDown",
   "ArrowLeft",
@@ -28,7 +35,7 @@ const GAME_KEYS = [
   "KeyD",
   "KeyP",
   "Escape",
-];
+]);
 
 const KEY_DIRS: Record<string, Dir> = {
   ArrowUp: "up",
@@ -68,6 +75,10 @@ export function createSnake(
   let countdownMs = 0;
 
   let skin: SkinId = options.skin ?? DEFAULT_SKIN;
+
+  // Sprites are built the first time a skin is used and freed in destroy().
+  let spriteCache: Partial<Record<SkinId, SnakeSprites>> = {};
+  const spritesFor = (id: SkinId): SnakeSprites => (spriteCache[id] ??= buildSprites(SKINS[id]));
   let lastEmitted: GameState | null = null;
 
   // Loading counts as "playing": the contract has no loading status.
@@ -75,17 +86,12 @@ export function createSnake(
     phase === "won" || phase === "lost" ? "gameover" : paused ? "paused" : "playing";
 
   const emit = () => {
-    const nextState: GameState = { score, lives: LIVES, level, status: status() };
+    const nextStatus = status();
     const prev = lastEmitted;
-    if (
-      prev &&
-      prev.score === nextState.score &&
-      prev.lives === nextState.lives &&
-      prev.level === nextState.level &&
-      prev.status === nextState.status
-    ) {
+    if (prev && prev.score === score && prev.level === level && prev.status === nextStatus) {
       return;
     }
+    const nextState: GameState = { score, lives: LIVES, level, status: nextStatus };
     lastEmitted = nextState;
     callbacks.onStateChange(nextState);
   };
@@ -126,13 +132,15 @@ export function createSnake(
     if (destroyed) return;
     if (phase === "loading") startCountdown();
     lastTime = null;
+    // Paused while loading: the loop is stopped, so show the new phase now.
+    if (rafId === 0) render();
   });
 
-  // The pixel font comes from next/font as a CSS variable on <html>.
-  const fontFamily = () => {
+  // The pixel font comes from next/font as a CSS variable on <html>; read once.
+  const fontFamily = (() => {
     const family = getComputedStyle(canvas).getPropertyValue("--font-press-start").trim();
     return family ? `${family}, monospace` : "monospace";
-  };
+  })();
 
   // ── Pause ───────────────────────────────────────────────────────────────────
   let lastTime: number | null = null;
@@ -146,13 +154,13 @@ export function createSnake(
   function resume() {
     if (!paused || destroyed) return;
     paused = false;
-    lastTime = null;
     emit();
+    ensureRunning();
   }
 
   // ── Input ───────────────────────────────────────────────────────────────────
   const onKeyDown = (e: KeyboardEvent) => {
-    if (GAME_KEYS.includes(e.code)) e.preventDefault();
+    if (GAME_KEYS.has(e.code)) e.preventDefault();
 
     if (e.code === "KeyP" || e.code === "Escape") {
       if (e.repeat) return;
@@ -196,9 +204,16 @@ export function createSnake(
     }
   }
 
+  // The step interval only changes with the level.
+  let intervalLevel = 0;
+  let interval = 0;
+
   function update(dt: number) {
     stepAccum += dt;
-    const interval = stepMs(level);
+    if (intervalLevel !== level) {
+      intervalLevel = level;
+      interval = stepMs(level);
+    }
     // dt is capped below the minimum interval, so this runs at most once per frame.
     if (stepAccum >= interval) {
       stepAccum -= interval;
@@ -210,7 +225,84 @@ export function createSnake(
   let rafId = 0;
   let destroyed = false;
 
+  const hud: HudLayer = { canvas: document.createElement("canvas"), signature: "" };
+  hud.canvas.width = W;
+  hud.canvas.height = HUD_LAYER_H;
+
+  // One view object, mutated each frame, so rendering allocates nothing.
+  const view: RenderView = {
+    phase,
+    paused,
+    score,
+    level,
+    countdownMs,
+    body,
+    dir,
+    fruit,
+    sheet,
+    fontFamily,
+    palette: SKINS[skin],
+    skin,
+    sprites: spritesFor(skin),
+    hud,
+  };
+
+  // The snake moves cell by cell with no in-between animation, so most frames would
+  // repaint the same picture. What was last drawn; a frame is skipped if nothing changed.
+  const drawn: {
+    body: Cell[] | null;
+    dir: Dir;
+    fruit: RenderView["fruit"];
+    phase: Phase;
+    paused: boolean;
+    digit: number;
+    skin: SkinId;
+    sheet: FruitSheet["status"];
+  } = { body: null, dir, fruit, phase, paused, digit: 0, skin, sheet: sheet.status };
+
+  const render = (force = false) => {
+    const digit = phase === "countdown" ? countdownDigit(countdownMs) : 0;
+    if (
+      !force &&
+      drawn.body === body &&
+      drawn.dir === dir &&
+      drawn.fruit === fruit &&
+      drawn.phase === phase &&
+      drawn.paused === paused &&
+      drawn.digit === digit &&
+      drawn.skin === skin &&
+      drawn.sheet === sheet.status
+    ) {
+      return;
+    }
+    drawn.body = body;
+    drawn.dir = dir;
+    drawn.fruit = fruit;
+    drawn.phase = phase;
+    drawn.paused = paused;
+    drawn.digit = digit;
+    drawn.skin = skin;
+    drawn.sheet = sheet.status;
+
+    view.phase = phase;
+    view.paused = paused;
+    view.score = score;
+    view.level = level;
+    view.countdownMs = countdownMs;
+    view.body = body;
+    view.dir = dir;
+    view.fruit = fruit;
+    view.palette = SKINS[skin];
+    view.skin = skin;
+    view.sprites = spritesFor(skin);
+    draw(ctx, view);
+  };
+
+  // The game advances only while playing, counting down or loading.
+  const running = () => !paused && phase !== "won" && phase !== "lost";
+
   const loop = (ts: number) => {
+    rafId = 0;
     if (destroyed) return;
     // dt in ms, capped so a tab blur can't make the snake jump several cells.
     const dt = lastTime === null ? 0 : Math.min(ts - lastTime, MAX_DT);
@@ -226,22 +318,25 @@ export function createSnake(
       update(dt);
     }
 
-    draw(ctx, {
-      phase,
-      paused,
-      score,
-      level,
-      countdownMs,
-      body,
-      dir,
-      fruit,
-      sheet,
-      fontFamily: fontFamily(),
-      palette: SKINS[skin],
-    });
+    render();
     emit();
+    // Paused or game over: the frame above (with its overlay) is the last one.
+    // resume() and restart() start the loop again.
+    if (running()) rafId = requestAnimationFrame(loop);
+  };
+
+  const ensureRunning = () => {
+    if (rafId !== 0 || destroyed) return;
+    lastTime = null;
     rafId = requestAnimationFrame(loop);
   };
+
+  // If the pixel font loads after the engine starts, the cached HUD used the fallback.
+  void document.fonts?.ready.then(() => {
+    if (destroyed) return;
+    hud.signature = "";
+    render(true);
+  });
 
   // ── Start ───────────────────────────────────────────────────────────────────
   window.addEventListener("keydown", onKeyDown);
@@ -256,6 +351,7 @@ export function createSnake(
     resume,
     setSkin(next: SkinId) {
       skin = next;
+      if (rafId === 0 && !destroyed) render();
     },
     restart() {
       if (destroyed) return;
@@ -265,12 +361,15 @@ export function createSnake(
       if (sheet.status === "loading") phase = "loading";
       else startCountdown();
       emit();
+      ensureRunning();
     },
     destroy() {
       if (destroyed) return;
       destroyed = true;
       cancelAnimationFrame(rafId);
+      rafId = 0;
       sheet.dispose();
+      spriteCache = {};
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("blur", onBlur);
     },

@@ -28,12 +28,13 @@ import {
   type Explosion,
   type Paddle,
 } from "./physics";
-import { draw, type Phase } from "./renderer";
+import { draw, HUD_LAYER_H, type HudLayer, type Phase, type RenderView } from "./renderer";
+import { buildShapes, type ArkanoidShapes } from "./shapes";
 import { SKINS } from "./skins";
 import { EXPLOSION_DURATION, loadSpritesheet, SPRITESHEET_SRC } from "./sprites";
 
 // Keys the game uses; the page must not scroll or click buttons with them.
-const GAME_KEYS = ["ArrowLeft", "ArrowRight", "KeyP", "Escape"];
+const GAME_KEYS = new Set(["ArrowLeft", "ArrowRight", "KeyP", "Escape"]);
 
 export function createArkanoid(
   canvas: HTMLCanvasElement,
@@ -59,6 +60,10 @@ export function createArkanoid(
   const keys = { ArrowLeft: false, ArrowRight: false };
 
   let skin: SkinId = options.skin ?? DEFAULT_SKIN;
+
+  // Glow shapes are built the first time a skin is used and freed in destroy().
+  let shapeCache: Partial<Record<SkinId, ArkanoidShapes>> = {};
+  const shapesFor = (id: SkinId): ArkanoidShapes => (shapeCache[id] ??= buildShapes(SKINS[id]));
   let lastEmitted: GameState | null = null;
 
   // Loading counts as "playing": the contract has no loading status.
@@ -66,17 +71,18 @@ export function createArkanoid(
     phase === "won" || phase === "lost" ? "gameover" : paused ? "paused" : "playing";
 
   const emit = () => {
-    const nextState: GameState = { score, lives, level, status: status() };
+    const nextStatus = status();
     const prev = lastEmitted;
     if (
       prev &&
-      prev.score === nextState.score &&
-      prev.lives === nextState.lives &&
-      prev.level === nextState.level &&
-      prev.status === nextState.status
+      prev.score === score &&
+      prev.lives === lives &&
+      prev.level === level &&
+      prev.status === nextStatus
     ) {
       return;
     }
+    const nextState: GameState = { score, lives, level, status: nextStatus };
     lastEmitted = nextState;
     callbacks.onStateChange(nextState);
   };
@@ -113,13 +119,15 @@ export function createArkanoid(
     if (destroyed) return;
     phase = "playing";
     lastTime = null;
+    // The loop stops while loading; this frame starts it (or redraws the pause overlay).
+    ensureRunning();
   });
 
-  // The pixel font comes from next/font as a CSS variable on <html>.
-  const fontFamily = () => {
+  // The pixel font comes from next/font as a CSS variable on <html>; read once.
+  const fontFamily = (() => {
     const family = getComputedStyle(canvas).getPropertyValue("--font-press-start").trim();
     return family ? `${family}, monospace` : "monospace";
-  };
+  })();
 
   // ── Pause ───────────────────────────────────────────────────────────────────
   let lastTime: number | null = null;
@@ -133,13 +141,13 @@ export function createArkanoid(
   function resume() {
     if (!paused || destroyed) return;
     paused = false;
-    lastTime = null;
     emit();
+    ensureRunning();
   }
 
   // ── Input ───────────────────────────────────────────────────────────────────
   const onKeyDown = (e: KeyboardEvent) => {
-    if (GAME_KEYS.includes(e.code)) e.preventDefault();
+    if (GAME_KEYS.has(e.code)) e.preventDefault();
 
     if (e.code === "KeyP" || e.code === "Escape") {
       if (e.repeat) return;
@@ -194,8 +202,13 @@ export function createArkanoid(
       }
     }
 
-    for (const exp of explosions) exp.elapsed += dt * 1000;
-    explosions = explosions.filter((exp) => exp.elapsed < EXPLOSION_DURATION);
+    // Age and drop finished explosions in place (no new array per frame).
+    let kept = 0;
+    for (const exp of explosions) {
+      exp.elapsed += dt * 1000;
+      if (exp.elapsed < EXPLOSION_DURATION) explosions[kept++] = exp;
+    }
+    explosions.length = kept;
 
     if (ball.y > H) {
       lives--;
@@ -212,31 +225,75 @@ export function createArkanoid(
   let rafId = 0;
   let destroyed = false;
 
+  // Score, level and lives are pre-rendered; regenerated when their signature changes.
+  const hud: HudLayer = { canvas: document.createElement("canvas"), signature: "" };
+  hud.canvas.width = W;
+  hud.canvas.height = HUD_LAYER_H;
+
+  // One view object, mutated each frame, so rendering allocates nothing.
+  const view: RenderView = {
+    phase,
+    paused,
+    score,
+    level,
+    lives,
+    blocks,
+    explosions,
+    paddle,
+    ball,
+    sheet,
+    fontFamily,
+    palette: SKINS[skin],
+    skin,
+    shapes: shapesFor(skin),
+    hud,
+  };
+
+  const render = () => {
+    view.phase = phase;
+    view.paused = paused;
+    view.score = score;
+    view.level = level;
+    view.lives = lives;
+    view.blocks = blocks;
+    view.explosions = explosions;
+    view.palette = SKINS[skin];
+    view.skin = skin;
+    view.shapes = shapesFor(skin);
+    draw(ctx, view);
+  };
+
+  // Only a running, unpaused game needs more frames.
+  const running = () => phase === "playing" && !paused;
+
   const loop = (ts: number) => {
+    rafId = 0;
     if (destroyed) return;
     // dt in seconds, capped so a tab blur can't make the ball tunnel.
     const dt = lastTime === null ? 0 : Math.min((ts - lastTime) / 1000, MAX_DT);
     lastTime = ts;
 
-    if (phase === "playing" && !paused) update(dt);
+    if (running()) update(dt);
 
-    draw(ctx, {
-      phase,
-      paused,
-      score,
-      level,
-      lives,
-      blocks,
-      explosions,
-      paddle,
-      ball,
-      sheet,
-      fontFamily: fontFamily(),
-      palette: SKINS[skin],
-    });
+    render();
     emit();
-    rafId = requestAnimationFrame(loop);
+    // Loading, paused or game over: the frame above (with its overlay) is the last
+    // one. The sheet settling, resume() and restart() start the loop again.
+    if (running()) rafId = requestAnimationFrame(loop);
   };
+
+  function ensureRunning() {
+    if (rafId !== 0 || destroyed) return;
+    lastTime = null;
+    rafId = requestAnimationFrame(loop);
+  }
+
+  // If the pixel font loads after the engine starts, the cached HUD used the fallback.
+  void document.fonts?.ready.then(() => {
+    if (destroyed) return;
+    hud.signature = "";
+    if (rafId === 0) render();
+  });
 
   // ── Start ───────────────────────────────────────────────────────────────────
   window.addEventListener("keydown", onKeyDown);
@@ -253,20 +310,23 @@ export function createArkanoid(
     resume,
     setSkin(next: SkinId) {
       skin = next;
+      if (rafId === 0 && !destroyed) render();
     },
     restart() {
       if (destroyed) return;
-      lastTime = null;
       initGame();
       // If the sheet is still loading, keep showing CARGANDO….
       phase = sheet.status === "loading" ? "loading" : "playing";
       emit();
+      ensureRunning();
     },
     destroy() {
       if (destroyed) return;
       destroyed = true;
       cancelAnimationFrame(rafId);
+      rafId = 0;
       sheet.dispose();
+      shapeCache = {};
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);

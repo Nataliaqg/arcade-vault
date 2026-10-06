@@ -1,5 +1,7 @@
+import type { SkinId } from "../skins";
 import { BALL_SIZE, H, W } from "./constants";
 import type { Ball, Block, Explosion, Paddle } from "./physics";
+import { paintShape, SPRITE_PAD, type ArkanoidShapes } from "./shapes";
 import type { ArkanoidPalette } from "./skins";
 import {
   drawFrame,
@@ -27,7 +29,20 @@ export type RenderView = {
   /** CSS font-family string, already ending in a monospace fallback. */
   fontFamily: string;
   palette: ArkanoidPalette;
+  skin: SkinId;
+  /** Flat shapes with their glow, pre-rendered for the current skin. */
+  shapes: ArkanoidShapes;
+  hud: HudLayer;
 };
+
+// Score, level and lives are pre-rendered; `signature` says what the canvas shows.
+export type HudLayer = {
+  canvas: HTMLCanvasElement; // W × HUD_LAYER_H
+  signature: string;
+};
+
+// Tall enough for the lives' glow (ball bottom at 33 + ~29 px of neon blur).
+export const HUD_LAYER_H = 64;
 
 const HUD_SIZE = 12;
 const HUD_Y = 30;
@@ -46,44 +61,29 @@ function noGlow(c: CanvasRenderingContext2D) {
   c.shadowBlur = 0;
 }
 
-type Shape = "block" | "paddle" | "ball";
-
-// Draws one sprite frame (classic skin), or a flat shape in the skin palette.
+// Draws one sprite frame (classic skin), or the cached flat shape (with its glow)
+// of the skin palette. The cached shape has SPRITE_PAD of margin on every side.
 function drawPiece(
   c: CanvasRenderingContext2D,
   v: RenderView,
   frame: Frame,
-  fallback: string,
-  shape: Shape,
+  cached: HTMLCanvasElement,
   x: number,
   y: number,
   w: number,
   h: number,
 ) {
-  const p = v.palette;
-  if (p.sprites && v.sheet.status === "loaded") {
+  if (v.palette.sprites && v.sheet.status === "loaded") {
     drawFrame(c, v.sheet, frame, x, y, w, h);
     return;
   }
-  c.fillStyle = fallback;
-  if (!p.sprites) glow(c, p, fallback, shape === "block" ? 8 : 12);
-  if (shape === "block") {
-    const i = p.blockInset;
-    c.fillRect(x + i, y + i, w - 2 * i, h - 2 * i);
-  } else if (p.rounded) {
-    c.beginPath();
-    c.roundRect(x, y, w, h, shape === "ball" ? Math.min(w, h) / 2 : h / 2);
-    c.fill();
-  } else {
-    c.fillRect(x, y, w, h);
-  }
-  c.shadowBlur = 0;
+  c.drawImage(cached, x - SPRITE_PAD, y - SPRITE_PAD);
 }
 
 function drawBlocks(c: CanvasRenderingContext2D, v: RenderView) {
   for (const b of v.blocks) {
     if (!b.alive) continue;
-    drawPiece(c, v, SPRITES.blocks[b.color], v.palette.blocks[b.color], "block", b.x, b.y, b.w, b.h);
+    drawPiece(c, v, SPRITES.blocks[b.color], v.shapes.blocks[b.color], b.x, b.y, b.w, b.h);
   }
 }
 
@@ -102,8 +102,10 @@ function drawExplosions(c: CanvasRenderingContext2D, v: RenderView) {
   }
 }
 
-function drawHud(c: CanvasRenderingContext2D, v: RenderView) {
+// Paints score, level and lives on the HUD layer; same coordinates as the canvas.
+function paintHudLayer(c: CanvasRenderingContext2D, v: RenderView) {
   const p = v.palette;
+  c.clearRect(0, 0, W, HUD_LAYER_H);
   c.font = `${HUD_SIZE}px ${v.fontFamily}`;
   c.textBaseline = "alphabetic";
 
@@ -121,8 +123,24 @@ function drawHud(c: CanvasRenderingContext2D, v: RenderView) {
   // Lives as ball sprites, right-aligned.
   for (let i = 0; i < v.lives; i++) {
     const x = W - HUD_MARGIN - (v.lives - i) * (BALL_SIZE + LIFE_SPACING) + LIFE_SPACING;
-    drawPiece(c, v, SPRITES.ball, p.ball, "ball", x, HUD_Y - BALL_SIZE + 3, BALL_SIZE, BALL_SIZE);
+    const y = HUD_Y - BALL_SIZE + 3;
+    if (p.sprites && v.sheet.status === "loaded") {
+      drawFrame(c, v.sheet, SPRITES.ball, x, y, BALL_SIZE, BALL_SIZE);
+    } else {
+      paintShape(c, p, p.ball, "ball", x, y, BALL_SIZE, BALL_SIZE);
+    }
   }
+}
+
+function drawHud(c: CanvasRenderingContext2D, v: RenderView) {
+  // The sheet status decides between sprite and flat lives.
+  const signature = `${v.score}|${v.level}|${v.lives}|${v.skin}|${v.sheet.status}`;
+  if (v.hud.signature !== signature) {
+    const hc = v.hud.canvas.getContext("2d");
+    if (hc) paintHudLayer(hc, v);
+    v.hud.signature = signature;
+  }
+  c.drawImage(v.hud.canvas, 0, 0);
 }
 
 function drawOverlay(
@@ -166,8 +184,8 @@ export function draw(c: CanvasRenderingContext2D, v: RenderView) {
 
   drawBlocks(c, v);
   drawExplosions(c, v);
-  drawPiece(c, v, SPRITES.paddle, p.paddle, "paddle", v.paddle.x, v.paddle.y, v.paddle.w, v.paddle.h);
-  drawPiece(c, v, SPRITES.ball, p.ball, "ball", v.ball.x, v.ball.y, v.ball.w, v.ball.h);
+  drawPiece(c, v, SPRITES.paddle, v.shapes.paddle, v.paddle.x, v.paddle.y, v.paddle.w, v.paddle.h);
+  drawPiece(c, v, SPRITES.ball, v.shapes.ball, v.ball.x, v.ball.y, v.ball.w, v.ball.h);
   drawHud(c, v);
 
   if (v.phase === "lost") drawOverlay(c, v, "GAME OVER", p.titleLost);

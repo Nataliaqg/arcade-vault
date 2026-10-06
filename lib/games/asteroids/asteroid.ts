@@ -54,6 +54,12 @@ export class Asteroid {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rot);
+    this.trace(ctx, pal);
+    ctx.restore();
+  }
+
+  /** Strokes the outline around the origin; the caller positions and rotates it. */
+  trace(ctx: CanvasRenderingContext2D, pal: AsteroidsPalette) {
     ctx.strokeStyle = pal.asteroid;
     ctx.lineWidth = pal.lineWidth;
     ctx.lineJoin = pal.pixel ? "miter" : "round";
@@ -66,6 +72,5 @@ export class Asteroid {
     }
     ctx.closePath();
     ctx.stroke();
-    ctx.restore();
   }
 }
