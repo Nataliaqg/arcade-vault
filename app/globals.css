@@ -1043,6 +1043,11 @@ a { color: inherit; text-decoration: none; }
   pointer-events: none;
   mix-blend-mode: multiply;
 }
+
+/* Game page only: no full-screen animation or blend mode repainting every frame. */
+body:has(.av-player) .av-bg::before { animation: none; }
+/* The overlay is semi-transparent black, so normal blending looks the same as multiply. */
+body:has(.av-player) .crt-screen::after { mix-blend-mode: normal; }
 .crt-screen::before {
   content: "";
   position: absolute; inset: 0;

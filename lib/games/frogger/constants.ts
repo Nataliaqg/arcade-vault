@@ -56,3 +56,9 @@ export const RESPAWN_MS = 600;
 
 // Largest frame step the loop accepts.
 export const MAX_DT = 50; // ms
+
+// Pre-rendered sprites: margin around each one so its glow is not clipped.
+export const SPRITE_PAD = 16;
+
+// Phases of the frog's jump pre-rendered as sprites.
+export const FROG_FRAMES = 4;

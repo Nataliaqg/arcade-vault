@@ -1,5 +1,11 @@
 import { DEFAULT_SKIN, type SkinId } from "../skins";
-import type { GameCallbacks, GameEngine, GameOptions, GameState, GameStatus } from "../types";
+import type {
+  GameCallbacks,
+  GameEngine,
+  GameOptions,
+  GameState,
+  GameStatus,
+} from "../types";
 import {
   COLS,
   H,
@@ -27,11 +33,12 @@ import {
   type Dir,
   type Lane,
 } from "./frogger";
-import { draw } from "./renderer";
+import { draw, HUD_LAYER_H, type HudLayer, type RenderView } from "./renderer";
 import { SKINS } from "./skins";
+import { buildSprites, type FroggerSprites } from "./sprites";
 
 // Keys the game uses; the page must not scroll or click buttons with them.
-const GAME_KEYS = [
+const GAME_KEYS = new Set([
   "ArrowUp",
   "ArrowDown",
   "ArrowLeft",
@@ -42,7 +49,7 @@ const GAME_KEYS = [
   "KeyD",
   "KeyP",
   "Escape",
-];
+]);
 
 const KEY_DIRS: Record<string, Dir> = {
   ArrowUp: "up",
@@ -57,7 +64,13 @@ const KEY_DIRS: Record<string, Dir> = {
 
 type Phase = "playing" | "respawn" | "over";
 
-type Jump = { fromX: number; fromRow: number; toX: number; toRow: number; t: number };
+type Jump = {
+  fromX: number;
+  fromRow: number;
+  toX: number;
+  toRow: number;
+  t: number;
+};
 
 export function createFrogger(
   canvas: HTMLCanvasElement,
@@ -95,32 +108,44 @@ export function createFrogger(
   let afterRespawn: "continue" | "over" = "continue";
 
   let skin: SkinId = options.skin ?? DEFAULT_SKIN;
+
+  // Sprites are built the first time a skin is used and freed in destroy().
+  let spriteCache: Partial<Record<SkinId, FroggerSprites>> = {};
+  const spritesFor = (id: SkinId): FroggerSprites =>
+    (spriteCache[id] ??= buildSprites(SKINS[id]));
   let lastEmitted: GameState | null = null;
   let lastTime: number | null = null;
 
-  const status = (): GameStatus => (phase === "over" ? "gameover" : paused ? "paused" : "playing");
+  const status = (): GameStatus =>
+    phase === "over" ? "gameover" : paused ? "paused" : "playing";
 
   const emit = () => {
-    const nextState: GameState = { score, lives, level, status: status() };
+    const nextStatus = status();
     const prev = lastEmitted;
     if (
       prev &&
-      prev.score === nextState.score &&
-      prev.lives === nextState.lives &&
-      prev.level === nextState.level &&
-      prev.status === nextState.status
+      prev.score === score &&
+      prev.lives === lives &&
+      prev.level === level &&
+      prev.status === nextStatus
     ) {
       return;
     }
+    const nextState: GameState = { score, lives, level, status: nextStatus };
     lastEmitted = nextState;
     callbacks.onStateChange(nextState);
   };
 
-  // The pixel font comes from next/font as a CSS variable on <html>.
-  const fontFamily = () => {
-    const family = getComputedStyle(canvas).getPropertyValue("--font-press-start").trim();
+  // The pixel font comes from next/font as a CSS variable on <html>; read once.
+  const fontFamily = (() => {
+    const family = getComputedStyle(canvas)
+      .getPropertyValue("--font-press-start")
+      .trim();
     return family ? `${family}, monospace` : "monospace";
-  };
+  })();
+
+  // The round length only changes with the level.
+  let roundMs = roundTime(level);
 
   function placeFrogAtStart() {
     frogX = START_X;
@@ -131,13 +156,14 @@ export function createFrogger(
     topRow = ROW_START;
     dead = false;
     hidden = false;
-    timeMs = roundTime(level);
+    timeMs = roundMs;
   }
 
   function initGame() {
     score = 0;
     lives = INITIAL_LIVES;
     level = 1;
+    roundMs = roundTime(level);
     clockMs = 0;
     phase = "playing";
     paused = false;
@@ -176,6 +202,7 @@ export function createFrogger(
     if (occupied.every(Boolean)) {
       score += ROUND_POINTS;
       level++;
+      roundMs = roundTime(level);
       occupied = MOUTH_STARTS.map(() => false);
       lanes = buildLanes(level, Math.random);
     }
@@ -189,7 +216,8 @@ export function createFrogger(
     const toRow = frogRow + v.y;
     const toX = frogX + v.x;
     // Can't leave the field: the HUD row above the mouths and the sides are walls.
-    if (toRow < ROW_GOALS || toRow > ROW_START || toX < 0 || toX > COLS - 1) return;
+    if (toRow < ROW_GOALS || toRow > ROW_START || toX < 0 || toX > COLS - 1)
+      return;
     facing = dir;
     jump = { fromX: frogX, fromRow: frogRow, toX, toRow, t: 0 };
   }
@@ -198,7 +226,9 @@ export function createFrogger(
     jump = null;
     frogRow = j.toRow;
     // On solid ground the frog snaps to the grid; on the river it keeps its offset.
-    frogX = isRiverRow(frogRow) ? j.toX : Math.min(COLS - 1, Math.max(0, Math.round(j.toX)));
+    frogX = isRiverRow(frogRow)
+      ? j.toX
+      : Math.min(COLS - 1, Math.max(0, Math.round(j.toX)));
 
     if (frogRow < topRow) {
       score += (topRow - frogRow) * ROW_POINTS;
@@ -238,13 +268,13 @@ export function createFrogger(
   function resume() {
     if (!paused || destroyed) return;
     paused = false;
-    lastTime = null;
     emit();
+    ensureRunning();
   }
 
   // ── Input ───────────────────────────────────────────────────────────────────
   const onKeyDown = (e: KeyboardEvent) => {
-    if (GAME_KEYS.includes(e.code)) e.preventDefault();
+    if (GAME_KEYS.has(e.code)) e.preventDefault();
     if (e.repeat) return;
 
     if (e.code === "KeyP" || e.code === "Escape") {
@@ -300,7 +330,60 @@ export function createFrogger(
   let rafId = 0;
   let destroyed = false;
 
+  const hud: HudLayer = {
+    canvas: document.createElement("canvas"),
+    signature: "",
+  };
+  hud.canvas.width = W;
+  hud.canvas.height = HUD_LAYER_H;
+
+  // One view object, mutated each frame, so rendering allocates nothing.
+  const view: RenderView = {
+    paused: false,
+    over: false,
+    score: 0,
+    level: 1,
+    lives: 0,
+    timeMs: 0,
+    roundMs: 0,
+    clockMs: 0,
+    lanes,
+    frog: { x: 0, y: 0, facing: "up", jump: 0, dead: false, hidden: false },
+    occupied,
+    fontFamily,
+    palette: SKINS[skin],
+    skin,
+    sprites: spritesFor(skin),
+    hud,
+  };
+
+  const render = () => {
+    const t = jump ? Math.min(1, jump.t) : 0;
+    view.paused = paused;
+    view.over = phase === "over";
+    view.score = score;
+    view.level = level;
+    view.lives = lives;
+    view.timeMs = timeMs;
+    view.roundMs = roundMs;
+    view.clockMs = clockMs;
+    view.lanes = lanes;
+    view.occupied = occupied;
+    view.palette = SKINS[skin];
+    view.skin = skin;
+    view.sprites = spritesFor(skin);
+    const f = view.frog;
+    f.x = jump ? jump.fromX + (jump.toX - jump.fromX) * t : frogX;
+    f.y = jump ? jump.fromRow + (jump.toRow - jump.fromRow) * t : frogRow;
+    f.facing = facing;
+    f.jump = t;
+    f.dead = dead;
+    f.hidden = hidden;
+    draw(ctx, view);
+  };
+
   const loop = (ts: number) => {
+    rafId = 0;
     if (destroyed) return;
     // dt in ms, capped so a tab blur can't teleport the world.
     const dt = lastTime === null ? 0 : Math.min(ts - lastTime, MAX_DT);
@@ -308,32 +391,25 @@ export function createFrogger(
 
     if (!paused && phase !== "over") update(dt);
 
-    const t = jump ? Math.min(1, jump.t) : 0;
-    draw(ctx, {
-      paused,
-      over: phase === "over",
-      score,
-      level,
-      lives,
-      timeMs,
-      roundMs: roundTime(level),
-      clockMs,
-      lanes,
-      frog: {
-        x: jump ? jump.fromX + (jump.toX - jump.fromX) * t : frogX,
-        y: jump ? jump.fromRow + (jump.toRow - jump.fromRow) * t : frogRow,
-        facing,
-        jump: t,
-        dead,
-        hidden,
-      },
-      occupied,
-      fontFamily: fontFamily(),
-      palette: SKINS[skin],
-    });
+    render();
     emit();
+    // Paused or game over: the frame above (with its overlay) is the last one.
+    // resume() and restart() start the loop again.
+    if (!paused && phase !== "over") rafId = requestAnimationFrame(loop);
+  };
+
+  const ensureRunning = () => {
+    if (rafId !== 0 || destroyed) return;
+    lastTime = null;
     rafId = requestAnimationFrame(loop);
   };
+
+  // If the pixel font loads after the engine starts, the cached HUD used the fallback.
+  void document.fonts?.ready.then(() => {
+    if (destroyed) return;
+    hud.signature = "";
+    if (rafId === 0) render();
+  });
 
   // ── Start ───────────────────────────────────────────────────────────────────
   window.addEventListener("keydown", onKeyDown);
@@ -348,17 +424,19 @@ export function createFrogger(
     resume,
     setSkin(next: SkinId) {
       skin = next;
+      if (rafId === 0 && !destroyed) render();
     },
     restart() {
       if (destroyed) return;
-      lastTime = null;
       initGame();
       emit();
+      ensureRunning();
     },
     destroy() {
       if (destroyed) return;
       destroyed = true;
       cancelAnimationFrame(rafId);
+      spriteCache = {};
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("blur", onBlur);
     },

@@ -1,6 +1,6 @@
 # SPEC 11 — Rendimiento de Frogger
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 10
 > **Fecha:** 2026-10-06
 > **Objetivo:** Que Frogger corra fluido en escritorio sin cambiar su aspecto, cacheando lo estático y el brillo, y parando el bucle cuando el juego no avanza.
