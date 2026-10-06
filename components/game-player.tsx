@@ -9,7 +9,6 @@ import { ENGINES, TOUCH_LAYOUTS } from "@/lib/games/registry";
 import { DEFAULT_SKIN, isSkinId, SKIN_IDS, SKIN_LABELS, type SkinId } from "@/lib/games/skins";
 import type { GameEngine, GameState } from "@/lib/games/types";
 
-const PLAYER = "INVITADO";
 const SKIN_KEY = "arcade-vault:skin:v1";
 const INITIAL_STATE: GameState = { score: 0, lives: 3, level: 1, status: "playing" };
 
@@ -49,7 +48,13 @@ function subscribeSkin(listener: () => void) {
 // Keep keyboard focus on the page so Space/arrows reach the game, not a button.
 const blurAfterClick = (e: MouseEvent<HTMLElement>) => e.currentTarget.blur();
 
-export default function GamePlayer({ game }: { game: Game }) {
+export default function GamePlayer({
+  game,
+  playerLabel,
+}: {
+  game: Game;
+  playerLabel: string;
+}) {
   const factory = ENGINES[game.id];
   const touchLayout = TOUCH_LAYOUTS[game.id];
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -125,7 +130,7 @@ export default function GamePlayer({ game }: { game: Game }) {
         <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
           <div className="hud-stat">
             <div className="l">Jugador</div>
-            <div className="v" style={{ color: "var(--ink)" }}>{PLAYER}</div>
+            <div className="v" style={{ color: "var(--ink)" }}>{playerLabel}</div>
           </div>
           <div className="hud-stat">
             <div className="l">Puntuación</div>

@@ -202,9 +202,68 @@ a { color: inherit; text-decoration: none; }
   .av-nav .logo-mark { flex-shrink: 0; }
 }
 
-/* The mobile panel already has "Iniciar Sesión"; keep room for the hamburger. */
+/* ===== user menu (nav con sesión) ===== */
+.user-menu { position: relative; margin-left: 16px; }
+.user-tag {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: transparent;
+  border: 1px solid var(--yellow);
+  color: var(--yellow);
+  font-family: var(--pixel); font-size: 10px; letter-spacing: 0.1em;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(245,255,0,0.25), inset 0 0 8px rgba(245,255,0,0.08);
+  transition: box-shadow 160ms, background 160ms;
+}
+.user-tag:hover, .user-tag[aria-expanded="true"] {
+  background: rgba(245,255,0,0.08);
+  box-shadow: 0 0 16px rgba(245,255,0,0.45), inset 0 0 8px rgba(245,255,0,0.12);
+}
+.user-tag:focus-visible, .user-menu-item:focus-visible, .mobile-signout:focus-visible {
+  outline: 2px solid var(--cyan); outline-offset: 2px;
+}
+.user-tag-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 8px var(--green);
+}
+.user-tag-name { max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-tag-caret { font-size: 9px; opacity: 0.7; }
+.user-menu-pop {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 70;
+  min-width: 220px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+}
+.user-menu-email {
+  padding: 12px 14px;
+  font-family: var(--mono); font-size: 12px; color: var(--ink-dim);
+  border-bottom: 1px dashed var(--line-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.user-menu-item {
+  display: block; width: 100%; text-align: left;
+  padding: 14px; background: transparent; border: 0; cursor: pointer;
+  font-family: var(--pixel); font-size: 10px; letter-spacing: 0.1em;
+  color: var(--magenta);
+}
+.user-menu-item:hover { background: rgba(255,0,170,0.08); }
+.mobile-user {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 12px;
+  font-family: var(--pixel); font-size: 11px; color: var(--yellow);
+  border-bottom: 1px dashed var(--line-2);
+}
+.mobile-signout {
+  width: 100%; text-align: left;
+  padding: 14px 12px; background: transparent; border: 0; cursor: pointer;
+  font-family: var(--pixel); font-size: 11px; color: var(--magenta);
+  border-bottom: 1px dashed var(--line-2);
+}
+
+/* The mobile panel already has the session controls; keep room for the hamburger. */
 @media (max-width: 480px) {
-  .av-nav .auth-btn { display: none; }
+  .av-nav .auth-btn, .av-nav .user-menu, .av-nav .user-menu-cta { display: none; }
   .av-nav .logo-text { font-size: 11px; }
 }
 
@@ -1251,8 +1310,38 @@ body:has(.av-player) .crt-screen::after { mix-blend-mode: normal; }
   font-family: var(--pixel); font-size: 8px; color: var(--ink-faint); letter-spacing: 0.16em;
 }
 .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.auth-card .btn:disabled { opacity: 0.5; cursor: progress; }
+.auth-error {
+  margin: 0 0 12px; padding: 10px 12px;
+  border: 1px solid var(--magenta); background: rgba(255,0,170,0.08);
+  color: var(--ink); font-family: var(--mono); font-size: 12px; line-height: 1.5;
+}
+.auth-notice {
+  margin: 10px 0 0; padding: 10px 12px;
+  border: 1px solid var(--green); background: rgba(0,255,136,0.07);
+  color: var(--ink); font-family: var(--mono); font-size: 12px; line-height: 1.5;
+}
+.auth-check { text-align: center; margin: 18px 0 8px; }
+.auth-check h3 { margin: 0 0 12px; font-family: var(--pixel); font-size: 13px; letter-spacing: 0.1em; }
+.auth-check p { margin: 0 0 16px; font-family: var(--mono); font-size: 12px; color: var(--ink-dim); line-height: 1.6; overflow-wrap: anywhere; }
+.auth-check strong { color: var(--ink); }
+.auth-resend { margin-bottom: 12px; }
+.auth-link {
+  background: none; border: 0; padding: 8px; cursor: pointer;
+  font-family: var(--mono); font-size: 11px; color: var(--cyan); text-decoration: underline;
+}
+.auth-forgot, .auth-back { display: block; text-align: right; padding: 0 0 4px; }
+.auth-back { text-align: center; margin-top: 12px; }
 .social { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .social .btn { padding: 12px; font-size: 9px; }
+
+@media (max-width: 480px) {
+  .av-auth-wrap { padding: 32px 16px; }
+  .auth-card { padding: 22px 18px; }
+  .auth-header h2 { font-size: 14px; }
+  .auth-tabs button { padding: 12px 4px; font-size: 8px; letter-spacing: 0.06em; }
+  .social .btn { padding: 12px 6px; }
+}
 
 /* ===== salón ===== */
 .av-hall {

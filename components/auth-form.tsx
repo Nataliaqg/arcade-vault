@@ -1,14 +1,71 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
+import Link from "next/link";
+import {
+  resendConfirmation,
+  signIn,
+  signInWithProvider,
+  signUp,
+  type AuthState,
+} from "@/app/auth/actions";
+import { PASSWORD_MIN } from "@/lib/auth/validation";
 
-export default function AuthForm() {
+const INITIAL: AuthState = {};
+
+function ResendForm({ email }: { email: string }) {
+  const [state, action, pending] = useActionState(resendConfirmation, INITIAL);
+  return (
+    <form action={action} className="auth-resend">
+      <input type="hidden" name="email" value={email} />
+      <button className="btn ghost" type="submit" disabled={pending} style={{ width: "100%" }}>
+        {pending ? "ENVIANDO..." : "REENVIAR CORREO"}
+      </button>
+      {state.error && (
+        <p className="auth-error" role="alert">
+          {state.error}
+        </p>
+      )}
+      {!state.error && state.sent && state.email && (
+        <p className="auth-notice" role="status">
+          Correo reenviado. Revisa también la carpeta de spam.
+        </p>
+      )}
+    </form>
+  );
+}
+
+function CheckMail({ email, onBack }: { email: string; onBack: () => void }) {
+  return (
+    <div className="auth-check">
+      <h3 className="neon-yellow">REVISA TU CORREO</h3>
+      <p>
+        Hemos enviado un enlace de confirmación a <strong>{email}</strong>. Ábrelo en este
+        mismo navegador para activar tu cuenta.
+      </p>
+      <ResendForm email={email} />
+      <button type="button" className="auth-link" onClick={onBack}>
+        Usar otro correo
+      </button>
+    </div>
+  );
+}
+
+export default function AuthForm({
+  linkError = false,
+  oauthError = false,
+}: {
+  linkError?: boolean;
+  oauthError?: boolean;
+}) {
   const [tab, setTab] = useState<"in" | "up">("in");
+  const [inState, inAction, inPending] = useActionState(signIn, INITIAL);
+  const [upState, upAction, upPending] = useActionState(signUp, INITIAL);
+  const [dismissedMail, setDismissedMail] = useState<AuthState | null>(null);
 
-  // Visual only: no session, no storage, no navigation.
-  const submit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-  };
+  const showCheckMail = tab === "up" && upState.sent && upState !== dismissedMail;
+  const state = tab === "in" ? inState : upState;
+  const pending = tab === "in" ? inPending : upPending;
 
   return (
     <div className="av-auth-wrap fade-in">
@@ -24,44 +81,122 @@ export default function AuthForm() {
           </div>
         </div>
 
-        <div className="auth-tabs">
-          <button type="button" className={tab === "in" ? "on" : ""} onClick={() => setTab("in")}>
-            INICIAR SESIÓN
-          </button>
-          <button type="button" className={tab === "up" ? "on" : ""} onClick={() => setTab("up")}>
-            CREAR CUENTA
-          </button>
-        </div>
+        {linkError && (
+          <p className="auth-error" role="alert">
+            El enlace no es válido o ha caducado. Ábrelo en el mismo navegador donde lo
+            pediste, o solicita uno nuevo.
+          </p>
+        )}
 
-        <form onSubmit={submit}>
-          <div className="field">
-            <label>Usuario</label>
-            <input placeholder="px_kai" />
-          </div>
-          {tab === "up" && (
-            <div className="field slide-in">
-              <label>Correo electrónico</label>
-              <input type="email" placeholder="jugador@vault.gg" />
+        {oauthError && (
+          <p className="auth-error" role="alert">
+            No se pudo iniciar sesión con Google o GitHub. Inténtalo de nuevo o usa tu correo.
+          </p>
+        )}
+
+        {showCheckMail ? (
+          <CheckMail email={upState.email ?? ""} onBack={() => setDismissedMail(upState)} />
+        ) : (
+          <>
+            <div className="auth-tabs">
+              <button type="button" className={tab === "in" ? "on" : ""} onClick={() => setTab("in")}>
+                INICIAR SESIÓN
+              </button>
+              <button type="button" className={tab === "up" ? "on" : ""} onClick={() => setTab("up")}>
+                CREAR CUENTA
+              </button>
             </div>
-          )}
-          <div className="field">
-            <label>Contraseña</label>
-            <input type="password" placeholder="••••••••" />
-          </div>
 
-          <button className="btn lg" type="submit" style={{ width: "100%", marginTop: 8 }}>
-            {tab === "in" ? "ENTRAR AL VAULT" : "CREAR Y JUGAR"}
-          </button>
-        </form>
+            <form action={tab === "in" ? inAction : upAction} key={tab}>
+              {tab === "up" && (
+                <div className="field">
+                  <label htmlFor="auth-username">Alias</label>
+                  <input
+                    id="auth-username"
+                    name="username"
+                    placeholder="px_kai"
+                    autoComplete="username"
+                    minLength={3}
+                    maxLength={12}
+                    pattern="[A-Za-z0-9_]{3,12}"
+                    title="De 3 a 12 caracteres: letras, números o _"
+                    required
+                  />
+                </div>
+              )}
+              <div className="field">
+                <label htmlFor="auth-email">Correo electrónico</label>
+                <input
+                  id="auth-email"
+                  name="email"
+                  type="email"
+                  placeholder="jugador@vault.gg"
+                  autoComplete="email"
+                  defaultValue={state.email}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="auth-password">Contraseña</label>
+                <input
+                  id="auth-password"
+                  name="password"
+                  type="password"
+                  placeholder="••••••••"
+                  autoComplete={tab === "in" ? "current-password" : "new-password"}
+                  minLength={tab === "up" ? PASSWORD_MIN : undefined}
+                  required
+                />
+              </div>
 
-        <button type="button" className="btn ghost" style={{ width: "100%", marginTop: 10 }}>
+              {state.error && (
+                <p className="auth-error" role="alert">
+                  {state.error}
+                </p>
+              )}
+              {tab === "in" && inState.unconfirmed && inState.email && (
+                <ResendForm email={inState.email} />
+              )}
+              {tab === "in" && (
+                <Link href="/auth/forgot" className="auth-link auth-forgot">
+                  ¿OLVIDASTE TU CONTRASEÑA?
+                </Link>
+              )}
+
+              <button
+                className="btn lg"
+                type="submit"
+                disabled={pending}
+                style={{ width: "100%", marginTop: 8 }}
+              >
+                {pending
+                  ? tab === "in"
+                    ? "ENTRANDO..."
+                    : "CREANDO CUENTA..."
+                  : tab === "in"
+                    ? "ENTRAR AL VAULT"
+                    : "CREAR CUENTA"}
+              </button>
+            </form>
+          </>
+        )}
+
+        <Link href="/games" className="btn ghost" style={{ width: "100%", marginTop: 10 }}>
           JUGAR COMO INVITADO
-        </button>
+        </Link>
 
         <div className="auth-divider">O CONTINÚA CON</div>
         <div className="social">
-          <button className="btn ghost" type="button">◆&nbsp; GOOGLE</button>
-          <button className="btn ghost" type="button">▣&nbsp; GITHUB</button>
+          <form action={signInWithProvider.bind(null, "google")}>
+            <button className="btn ghost" type="submit" style={{ width: "100%" }}>
+              ◆&nbsp; GOOGLE
+            </button>
+          </form>
+          <form action={signInWithProvider.bind(null, "github")}>
+            <button className="btn ghost" type="submit" style={{ width: "100%" }}>
+              ▣&nbsp; GITHUB
+            </button>
+          </form>
         </div>
 
         <div
