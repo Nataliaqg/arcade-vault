@@ -61,7 +61,8 @@ Real auth is NOT implemented yet (`/auth` is a UI mock; the player HUD shows "IN
 
 - Usa siempre /frontend-design para diseñar la interfaz de usuario.
 - `/spec` crea una spec y `/spec-impl` implementa una spec aprobada (instaladas con `npx skills@latest add Klerith/fernando-skills`).
-- Para añadir un juego nuevo (desde `references/started-games/` o desde cero), genera primero su spec con /add-game (`.claude/skills/add-game/`) y luego implementa con /spec-impl. Integrar un juego implica: motor en `lib/games/<id>/`, registro en `ENGINES` (antes de insertar la fila), clase `.cover-<id>` en `globals.css` y migración Supabase `seed_game_<id>` en la tabla `games`.
+- Para añadir un juego nuevo (desde `references/started-games/` o desde cero), genera primero su spec con /add-game (`.claude/skills/add-game/`) y luego implementa con /spec-impl. Integrar un juego implica: motor en `lib/games/<id>/`, registro en `ENGINES` (antes de insertar la fila), `lib/games/<id>/touch.ts` (exporta `TOUCH_LAYOUT`: botones A/B y autorrepetición del mando táctil) y su entrada en `TOUCH_LAYOUTS` (`lib/games/registry.ts`), clase `.cover-<id>` en `globals.css` y migración Supabase `seed_game_<id>` en la tabla `games`.
+- El mando táctil (`components/touch-gamepad.tsx`, visible solo con `pointer: coarse`) despacha `KeyboardEvent` sintéticos en `window`: los motores deben escuchar el teclado en `window` y leer `e.code`.
 - Todo juego debe incluir `lib/games/<id>/skins.ts` con las 3 skins `classic` (por defecto), `neon` y `retro`, legibles en modo oscuro. Tras añadir un juego, ejecuta el agente `skin-designer`.
 
 ## Agents

@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import Link from "next/link";
 import GameOverModal from "@/components/game-over-modal";
+import TouchGamepad from "@/components/touch-gamepad";
 import type { Game } from "@/lib/data";
-import { ENGINES } from "@/lib/games/registry";
+import { ENGINES, TOUCH_LAYOUTS } from "@/lib/games/registry";
 import { DEFAULT_SKIN, isSkinId, SKIN_IDS, SKIN_LABELS, type SkinId } from "@/lib/games/skins";
 import type { GameEngine, GameState } from "@/lib/games/types";
 
@@ -50,6 +51,7 @@ const blurAfterClick = (e: MouseEvent<HTMLElement>) => e.currentTarget.blur();
 
 export default function GamePlayer({ game }: { game: Game }) {
   const factory = ENGINES[game.id];
+  const touchLayout = TOUCH_LAYOUTS[game.id];
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const [engineState, setEngineState] = useState<GameState>(INITIAL_STATE);
@@ -105,6 +107,18 @@ export default function GamePlayer({ game }: { game: Game }) {
     setOver(false);
   };
 
+  const skinButtons = SKIN_IDS.map((id) => (
+    <button
+      key={id}
+      type="button"
+      className={`btn ghost skin-btn${id === skin ? " active" : ""}`}
+      aria-pressed={id === skin}
+      onClick={(e) => chooseSkin(e, id)}
+    >
+      {SKIN_LABELS[id]}
+    </button>
+  ));
+
   return (
     <div className="av-player fade-in">
       <div className="player-hud">
@@ -157,23 +171,24 @@ export default function GamePlayer({ game }: { game: Game }) {
                 >
                   PULSA REANUDAR PARA CONTINUAR
                 </div>
+                <div className="touch-only pause-actions">
+                  <button type="button" className="btn yellow" onClick={togglePause}>
+                    REANUDAR
+                  </button>
+                  <button type="button" className="btn magenta" onClick={finish}>
+                    FIN
+                  </button>
+                  <Link href={`/games/${game.id}`} className="btn ghost">
+                    SALIR
+                  </Link>
+                </div>
               </div>
             </div>
           )}
         </div>
         <div className="skin-picker" role="group" aria-label="Aspecto del juego">
           <span className="skin-picker-label">Aspecto</span>
-          {SKIN_IDS.map((id) => (
-            <button
-              key={id}
-              type="button"
-              className={`btn ghost skin-btn${id === skin ? " active" : ""}`}
-              aria-pressed={id === skin}
-              onClick={(e) => chooseSkin(e, id)}
-            >
-              {SKIN_LABELS[id]}
-            </button>
-          ))}
+          {skinButtons}
         </div>
         <div className="crt-bottom">
           <span className="led">SEÑAL OK</span>
@@ -181,6 +196,20 @@ export default function GamePlayer({ game }: { game: Game }) {
           <span>CARGA · 1MB</span>
         </div>
       </div>
+
+      {touchLayout && (
+        <div className="touch-only touch-controls">
+          <TouchGamepad layout={touchLayout} />
+          <div className="touch-row">
+            <button type="button" className="btn yellow" onClick={togglePause}>
+              {paused ? "REANUDAR" : "PAUSA"}
+            </button>
+            <div className="skin-picker" role="group" aria-label="Aspecto del juego">
+              {skinButtons}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <GameOverModal gameId={game.id} score={state.score} onRestart={restart} />
