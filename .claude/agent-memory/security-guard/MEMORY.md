@@ -24,4 +24,8 @@
 
 ## Historial de auditorías
 
-(vacío; primera ejecución pendiente)
+- 2026-10-06 · `913f565` (spec-13): 0 CRÍTICA, 0 ALTA, 0 MEDIA, 5 BAJA (B1 grants, B2 índice, A1 getOrigin, A2 enumeración signUp, A3 provider). Baseline SPEC 13 cumplido. Build no ejecutado (servidor en :3000).
+
+## Notas
+
+- [Falsos positivos y BAJA conocidos](audit_notes.md) — grants por defecto, índice sin uso, hallazgos abiertos a seguir
