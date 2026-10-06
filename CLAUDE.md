@@ -65,6 +65,7 @@ Real auth is NOT implemented yet (`/auth` is a UI mock; the player HUD shows "IN
 
 - Usa siempre /frontend-design para diseñar la interfaz de usuario.
 - `/spec` crea una spec y `/spec-impl` implementa una spec aprobada (instaladas con `npx skills@latest add Klerith/fernando-skills`).
+- `/spec-impl-game <NN-juego-id>` es la forma recomendada de implementar una spec de juego aprobada: ejecuta `/spec-impl` y, al terminar, lanza en secuencia `skin-designer` y luego `mobile-porter` (`.claude/skills/spec-impl-game/`).
 - Para añadir un juego nuevo (desde `references/started-games/` o desde cero), genera primero su spec con /add-game (`.claude/skills/add-game/`) y luego implementa con /spec-impl. Integrar un juego implica: motor en `lib/games/<id>/`, registro en `ENGINES` (antes de insertar la fila), `lib/games/<id>/touch.ts` (exporta `TOUCH_LAYOUT`: botones A/B y autorrepetición del mando táctil) y su entrada en `TOUCH_LAYOUTS` (`lib/games/registry.ts`), clase `.cover-<id>` en `globals.css` y migración Supabase `seed_game_<id>` en la tabla `games`.
 - El mando táctil (`components/touch-gamepad.tsx`, visible solo con `pointer: coarse`) despacha `KeyboardEvent` sintéticos en `window`: los motores deben escuchar el teclado en `window` y leer `e.code`.
 - Todo juego debe incluir `lib/games/<id>/skins.ts` con las 3 skins `classic` (por defecto), `neon` y `retro`, legibles en modo oscuro. Tras añadir un juego, ejecuta el agente `skin-designer`.
@@ -73,4 +74,5 @@ Real auth is NOT implemented yet (`/auth` is a UI mock; the player HUD shows "IN
 
 - `game-planner` (`.claude/agents/game-planner.md`): decide qué juego encaja como siguiente incorporación al catálogo. Mantiene memoria de sus sugerencias en `.claude/agent-memory/game-planner/MEMORY.md` (versionada) y la lista de pendientes en `references/game-suggestions-todo.md`. Solo recomienda: la spec se genera después con `/add-game`.
 - `game-jam` (`.claude/agents/game-jam.md`): recibe un tema y escribe un juego con ≥2 specs alternativas (variantes completas) en `specs/game-jam/<game-id>/`, más un `README.md` comparativo. Solo specs en `Borrador`; la elegida se mueve a `specs/NN-juego-<id>.md` y se implementa con `/spec-impl`.
+- `mobile-porter` (`.claude/agents/mobile-porter.md`): porta un juego al mando táctil (spec 09): crea o valida `lib/games/<id>/touch.ts` y su entrada en `TOUCH_LAYOUTS`. Un juego por invocación.
 - `skin-designer` (`.claude/agents/skin-designer.md`): audita que cada juego tenga ≥3 skins (clásico por defecto, neón, retro), legibles en modo oscuro, e implementa directamente las que falten (`lib/games/<id>/skins.ts`, `setSkin`, selector en el player). Estado en `references/skins-status.md` y memoria en `.claude/agent-memory/skin-designer/MEMORY.md`.
