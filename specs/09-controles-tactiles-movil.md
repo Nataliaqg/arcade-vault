@@ -1,6 +1,6 @@
 # SPEC 09 — Controles táctiles para móvil
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 04, SPEC 05, SPEC 06, SPEC 07, SPEC 08
 > **Fecha:** 2026-10-06
 > **Objetivo:** Hacer jugables los 4 juegos en dispositivos táctiles. En `/games/[id]/play` se muestra un mando virtual (cruceta + botones A/B) bajo el canvas, que envía a los motores los mismos eventos de teclado que un teclado físico.

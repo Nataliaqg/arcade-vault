@@ -31,6 +31,7 @@ Real auth is NOT implemented yet (`/auth` is a UI mock; the player HUD shows "IN
 - `/` home landing · `/games` gallery · `/games/[id]` detail + top 10 · `/games/[id]/play` player · `/salon` Hall of Fame · `/auth` mock form
 - `app/api/health/supabase/route.ts` — Supabase health check
 - `next.config.ts` redirects legacy `/juego/:id(/jugar)` → `/games/:id(/play)`
+- `app/error.tsx` global error boundary; `components/home/` holds the landing pieces.
 
 ### Data (Supabase)
 
@@ -39,12 +40,15 @@ Real auth is NOT implemented yet (`/auth` is a UI mock; the player HUD shows "IN
 - Tables: `games(id, title, short, long, cat, cover, color)` and `scores(game_id, player_name, score, user_id?)`. No local `supabase/` dir — migrations are applied via the Supabase MCP (`.mcp.json`).
 - Reads (server): `lib/db/games.ts` (`getGames`, `getGame`), `lib/db/scores.ts` (`getTopScores`). Writes (browser, anonymous): `lib/db/submit-score.ts`.
 - Shared types in `lib/data.ts`; player name persisted in localStorage via `lib/player-name.ts`.
+- `lib/format.ts` `formatDate`: fixed UTC dd/mm/yyyy to avoid server/browser hydration mismatches.
 
 ### Game engines
 
-- Contract in `lib/games/types.ts`: `GameFactory(canvas, callbacks) → GameEngine { pause, resume, restart, destroy }`, `GameState { score, lives, level, status }`.
+- Contract in `lib/games/types.ts`: `GameFactory(canvas, callbacks, options?: { skin }) → GameEngine { pause, resume, restart, destroy, setSkin }`, `GameState { score, lives, level, status }`.
 - Each game lives in `lib/games/<id>/` (`index.ts` exports `create<Name>`), owns its rAF loop (dt capped at 50 ms), keyboard listeners and canvas HUD, and calls `onStateChange` only on changes.
 - `lib/games/registry.ts` maps `id → factory` (`ENGINES`). `components/game-player.tsx` mounts the engine (800×600 canvas in `.crt-screen`) and opens `components/game-over-modal.tsx` for score submission. Leaderboards need no per-game code.
+- Skins: shared contract in `lib/games/skins.ts` (`SkinId` = `classic|neon|retro`, `DEFAULT_SKIN`, `SKIN_LABELS`, WCAG `contrastRatio`); each game defines its palette in `lib/games/<id>/skins.ts`. The player shows the `.skin-picker`, persists the choice in localStorage (`arcade-vault:skin:v1`) and applies it live via `setSkin`.
+- Touch: shared types in `lib/games/touch.ts` (`TouchLayout`, `DPAD_CODES`, auto-repeat timings); `TOUCH_LAYOUTS` lives in `registry.ts` next to `ENGINES`; rendered by `components/touch-gamepad.tsx`.
 - Assets go in `public/games/<id>/`. `references/` holds source material only (templates, vanilla JS games in `references/started-games/`, assets) — do not import from it.
 
 ### Styling
